@@ -1,0 +1,41 @@
+# --- RUST CORE ---
+# El directorio de compilación (Pesa GBs, nunca subir)
+/target/
+
+# Archivos de respaldo de editores
+**/*.rs.bk
+*.swp
+*~
+
+# --- INTELIGENCIA ARTIFICIAL (CRÍTICO) ---
+# Ignoramos los modelos pesados para no romper el repo
+# (Estos se descargan localmente pero no se suben a la nube)
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Carpetas específicas de modelos (por si acaso)
+models/
+weights/
+cache/
+
+# --- DATOS SENSORIALES ---
+# No subir grabaciones de audio ni logs del sistema
+*.wav
+*.mp3
+logs/
+data/
+recordings/
+
+# --- CONFIGURACIÓN & SECRETOS ---
+# Variables de entorno (API Keys, etc)
+.env
+.env.*
+
+# --- SISTEMA / IDE ---
+.DS_Store
+.vscode/
+.idea/
