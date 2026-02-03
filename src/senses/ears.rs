@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 use crate::core::thought::{Thought, MindVoice};
 use rustfft::{FftPlanner, num_complex::Complex};
+use std::io::Write;
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioSpectrum {
@@ -138,12 +139,14 @@ impl AudioListener {
                 // A. Check Metrics (RMS) & FFT
                 let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
                 
-                // DEBUG: Print RMS to stderr every ~100 frames
+                // DEBUG: Write RMS to file every ~100 frames
                 static mut FRAME_COUNT: u32 = 0;
                 unsafe {
                     FRAME_COUNT += 1;
                     if FRAME_COUNT % 100 == 0 {
-                        eprintln!("🎧 RMS: {:.6}", rms);
+                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/audio_debug.log") {
+                            let _ = writeln!(f, "RMS: {:.6}", rms);
+                        }
                     }
                 }
                 

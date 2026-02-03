@@ -1,43 +1,44 @@
 #!/bin/bash
-# ALEPH Lightning AI Setup Script
+# ALEPH Lightning AI Setup Script - CPU Only (avoids CUDA build issues)
 # Run with: bash setup_lightning.sh
 
 set -e
-echo "🧠 ALEPH Lightning AI Setup"
-echo "=========================="
+echo "🧠 ALEPH Lightning AI Setup (CPU Mode)"
+echo "======================================="
 
-# 1. System Dependencies
-echo "📦 Installing system dependencies..."
+# 1. Install libclang (required by whisper-rs bindgen)
+echo "📦 Installing libclang..."
 sudo apt-get update
-sudo apt-get install -y build-essential pkg-config libssl-dev libasound2-dev curl git
+sudo apt-get install -y libclang-dev clang build-essential pkg-config libssl-dev libasound2-dev curl
 
-# 2. Rust (if not installed)
+# 2. Set environment for libclang
+export LIBCLANG_PATH=/usr/lib/llvm-14/lib/
+echo "export LIBCLANG_PATH=/usr/lib/llvm-14/lib/" >> ~/.bashrc
+
+# 3. Rust (if not installed)
 if ! command -v cargo &> /dev/null; then
     echo "🦀 Installing Rust..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source "$HOME/.cargo/env"
 else
-    echo "✅ Rust already installed"
+    echo "✅ Rust already installed: $(rustc --version)"
 fi
 
-# 3. Clone ALEPH (if not present)
-if [ ! -d "ALEPH" ]; then
-    echo "📥 Cloning ALEPH..."
-    git clone https://github.com/YOUR_REPO/ALEPH.git
-    cd ALEPH
-else
-    echo "✅ ALEPH directory exists"
-    cd ALEPH
+# 4. Modify Cargo.toml to disable CUDA (avoid kernel build errors)
+echo "🔧 Disabling CUDA features..."
+if [ -f "Cargo.toml" ]; then
+    # Remove cuda feature from candle dependencies
+    sed -i 's/, "cuda"//g' Cargo.toml
+    sed -i 's/"cuda",//g' Cargo.toml
+    sed -i 's/features = \["cuda"\]/features = []/g' Cargo.toml
 fi
 
-# 4. Download Models
+# 5. Download models
 echo "📥 Downloading models..."
-mkdir -p models
-
-# TinyLlama (small, reliable)
+# TinyLlama (small, reliable, 638MB)
 if [ ! -f "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf" ]; then
     echo "   Downloading TinyLlama..."
-    wget -q https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+    wget -q --show-progress https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
 fi
 
 # Tokenizer
@@ -46,41 +47,27 @@ if [ ! -f "tokenizer_tinyllama.json" ]; then
     wget -q https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/tokenizer.json -O tokenizer_tinyllama.json
 fi
 
-# Whisper model
+# Whisper model (base, ~140MB)
 if [ ! -f "ggml-base.bin" ]; then
-    echo "   Downloading Whisper..."
-    wget -q https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+    echo "   Downloading Whisper base model..."
+    wget -q --show-progress https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 fi
 
-# 5. Switch to TinyLlama (known working)
-echo "🔧 Configuring for TinyLlama..."
-sed -i 's|const MODEL_FILE:.*|const MODEL_FILE: \&str = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf";|' src/core/llm.rs
-sed -i 's|const TOKENIZER_FILE:.*|const TOKENIZER_FILE: \&str = "tokenizer_tinyllama.json";|' src/core/llm.rs
+# 6. Clean previous builds
+echo "🧹 Cleaning previous builds..."
+cargo clean 2>/dev/null || true
 
-# Also switch back to Llama loader instead of custom Gemma
-sed -i 's|use crate::core::quantized_gemma_raw::ModelWeights as Gemma;|use candle_transformers::models::quantized_llama::ModelWeights as Llama;|' src/core/llm.rs
-sed -i 's|model: Gemma,|model: Llama,|' src/core/llm.rs
-sed -i 's|fn load_model(device: \&Device) -> Result<Gemma>|fn load_model(device: \&Device) -> Result<Llama>|' src/core/llm.rs
-sed -i 's|let model = Gemma::from_gguf|let model = Llama::from_gguf|' src/core/llm.rs
+# 7. Build (CPU only)
+echo "🔨 Building ALEPH (CPU only, this may take a while)..."
+CUDA_VISIBLE_DEVICES="" cargo build --release 2>&1 | tail -30
 
-# 6. Verify GPU
-echo "🖥️ Checking GPU..."
-if command -v nvidia-smi &> /dev/null; then
-    nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
-else
-    echo "⚠️ No NVIDIA GPU detected, will use CPU"
-fi
-
-# 7. Build
-echo "🔨 Building ALEPH..."
-cargo build --release 2>&1 | tail -20
-
-# 8. Verify
 echo ""
 echo "✅ Setup complete!"
 echo ""
-echo "📁 Files:"
-ls -lh *.gguf *.bin *.json 2>/dev/null || echo "   (check models/)"
+echo "📁 Models:"
+ls -lh *.gguf *.bin 2>/dev/null || echo "   Check downloads"
 echo ""
-echo "🚀 To run: cargo run --release"
-echo "📺 Note: TUI requires a terminal. For headless, you may need to disable TUI."
+echo "🚀 To run: CUDA_VISIBLE_DEVICES='' cargo run --release"
+echo ""
+echo "⚠️  Note: Lightning Studio may not have audio input."
+echo "    ALEPH will run but voice input won't work without a mic."
