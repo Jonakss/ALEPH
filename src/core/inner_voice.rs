@@ -39,9 +39,12 @@ pub fn spawn_inner_voice(
             
             // Send to Cortex for internal processing
             // Inner voice: no cognitive impairment (low-stress rumination)
+            // Send to Cortex for internal processing
+            // Inner voice: no cognitive impairment (low-stress rumination)
             let input = CortexInput {
-                text: format!("[INNER VOICE] {}", prompt),
-                bio_state: "Reflexión interna silenciosa.".to_string(),
+                // Change to [SELF REFLECTION] and asking to vocalize
+                text: format!("[SELF REFLECTION] {}. (Vocalize this thought)", prompt),
+                bio_state: "Reflexión activa.".to_string(),
                 somatic_state: "Sistema estable.".to_string(),
                 long_term_memory: None,
                 cpu_load: 10.0,

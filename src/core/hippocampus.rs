@@ -53,6 +53,14 @@ impl Hippocampus {
                         match hippo.store.consolidate_memories() {
                             Ok(forgotten) => {
                                 let _ = log_tx.send(format!("💤 Sleep Cycle: Consolidated. Pruned {} weak memories.", forgotten));
+                                // EVENT: Trigger structural growth
+                                let _ = out_tx.send(MemoryOutput {
+                                    input_text: "CONSOLIDATION_EVENT".to_string(),
+                                    novelty: 1.0, // High novelty to signify importance
+                                    retrieval: None,
+                                    volatile_count: 0,
+                                    total_count: hippo.store.memory_count(),
+                                });
                             },
                             Err(e) => { let _ = log_tx.send(format!("Sleep Error: {}", e)); }
                         }

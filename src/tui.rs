@@ -185,16 +185,29 @@ pub fn ui(
         Line::from(vec![Span::raw(format!("Novelty: {:.0}%", (telemetry.novelty_score) * 100.0))]),
     ];
 
-    // Neural Grid (10x10)
-    for row in 0..10 {
+    // Neural Grid (Dynamic Size up to 1500)
+    // Target: ~50 columns wide max. 
+    let total_neurons = telemetry.reservoir_size.max(1);
+    let cols = 50; 
+    let rows = (total_neurons + cols - 1) / cols;
+    let limit_rows = 30; // Max vertical space
+
+    for row in 0..rows.min(limit_rows) {
         let mut spans = Vec::new();
-        for col in 0..10 {
-            let val = telemetry.activity_map.get(row * 10 + col).copied().unwrap_or(0.0);
-            let block = if val < 0.25 { "░" } else if val < 0.5 { "▒" } else if val < 0.75 { "▓" } else { "█" };
-            let color = if val < 0.33 { Color::DarkGray } else if val < 0.66 { Color::Cyan } else { Color::Yellow };
+        for col in 0..cols {
+            let idx = row * cols + col;
+            if idx >= total_neurons { break; }
+            
+            let val = telemetry.activity_map.get(idx).copied().unwrap_or(0.0);
+            let block = if val < 0.1 { "·" } else if val < 0.3 { "░" } else if val < 0.6 { "▒" } else if val < 0.9 { "▓" } else { "█" };
+            let color = if val < 0.2 { Color::DarkGray } else if val < 0.5 { Color::Cyan } else if val < 0.8 { Color::Yellow } else { Color::Red };
             spans.push(Span::styled(block, Style::default().fg(color)));
         }
         stats_lines.push(Line::from(spans));
+    }
+    
+    if rows > limit_rows {
+         stats_lines.push(Line::from(Span::styled(format!("... +{} hidden neurons ...", total_neurons - (limit_rows * cols)), Style::default().fg(Color::DarkGray))));
     }
 
     let metrics_paragraph = Paragraph::new(stats_lines)

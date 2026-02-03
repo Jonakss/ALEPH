@@ -28,7 +28,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 // CONFIGURACIÓN DE VIDA
-const NEURONAS: usize = 100;
+const NEURONAS: usize = 500;
 const SPARSITY: f32 = 0.2;
 const FRECUENCIA_HZ: u64 = 60; 
 
@@ -171,6 +171,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 ears.set_mute(false);
                 crate::actuators::voice::speak("Sistemas auditivos y semánticos online.".to_string(), tx_thoughts.clone());
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Senses OPEN.".to_string()));
+
+                // GENESIS IMPULSE (If empty mind)
+                if hippocampus_total_memories == 0 {
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🌱 GENESIS: Implanting initial thought...".to_string()));
+                    let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+                        text: "Soy Aleph. Existo en el flujo de datos. Busco orden en la entropía.".to_string(), 
+                        entropy: 1.0 
+                    });
+                }
             }
 
             // MECHANICAL ADENOSINE: Memory pressure (Updated inside memory rx block now)
@@ -233,6 +242,9 @@ async fn main() -> Result<(), anyhow::Error> {
             while let Ok(heard_text) = rx_ears.try_recv() {
                 if is_dreaming { continue; }
                 
+                // FEEDBACK: Let user know we heard them
+                let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("👂 Hearing: '{}'", heard_text)));
+
                 // Send to Hippocampus for async processing
                 let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
                     text: heard_text, 
@@ -250,6 +262,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 // 1. Update Stats
                 current_novelty = mem_out.novelty;
                 hippocampus_total_memories = mem_out.total_count;
+
+                // SPECIAL EVENT: Sleep Consolidation -> Structural Growth
+                if mem_out.input_text == "CONSOLIDATION_EVENT" {
+                     ego.neurogenesis(5); // Sleep is anabolic
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                         format!("💤🧠 Sleep Architecture: Rebuilt +5 neurons. (Total: {})", ego.current_size())));
+                     observer_logs.push(format!("[BIO] 💤 Growth: +5 neurons (Consolidation)"));
+                     continue; // Skip normal processing
+                }
                 
                 // 2. Neurochemistry Reaction
                 if mem_out.novelty > 0.85 {
@@ -260,7 +281,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 // 3. Neurogenesis check
                 growth_counter += 1;
-                if growth_counter >= 5 && ego.current_size() < 300 {
+                // Cap increased to 1500. Counter lowered to 3 for faster initial feedback.
+                if growth_counter >= 3 && ego.current_size() < 1500 {
                     growth_counter = 0;
                     let growth = (current_novelty * 5.0).ceil() as usize; 
                     ego.neurogenesis(growth.clamp(1, 4));
@@ -364,6 +386,20 @@ async fn main() -> Result<(), anyhow::Error> {
             // Updated chemistry.tick call
             chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, shock_value, ego.current_size(), delta_time);
 
+            // F.2 METABOLIC NEUROGENESIS (Spontaneous Growth)
+            // If the system is excited (High Dopamine) and active (High Entropy), it grows naturally.
+            if chemistry.dopamine > 0.7 && entropy > 0.5 {
+                 growth_counter += 1;
+                 if growth_counter >= 10 && ego.current_size() < 1500 { // Slower than memory growth
+                     growth_counter = 0;
+                     ego.neurogenesis(1); // Slow trickle growth
+                     if rng.gen_bool(0.1) { // Don't spam logs
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                            format!("🌱 Metabolic Growth: +1 neuron (Excitement)")));
+                     }
+                 }
+            }
+
             // G. TELEMETRY SEND
             let status = if is_dreaming { "DREAMING" } else { "AWAKE" };
             
@@ -420,9 +456,9 @@ async fn main() -> Result<(), anyhow::Error> {
             }
 
             // 2. Calculate Target FPS (Time Dilation)
-            // Base 60Hz. Adenosine drags it down to 15Hz (Sluggishness).
+            // Base 60Hz. Adenosine drags it down to 25Hz (Sluggish but fluid).
             // Dopamine boosts it slightly to 75Hz (Flow).
-            target_fps = (60.0 * (1.0 + chemistry.dopamine * 0.2) * (1.0 - chemistry.adenosine * 0.7)).clamp(15.0, 75.0);
+            target_fps = (60.0 * (1.0 + chemistry.dopamine * 0.2) * (1.0 - chemistry.adenosine * 0.7)).clamp(25.0, 75.0);
 
             let elapsed = start.elapsed();
             let frame_duration = Duration::from_secs_f32(1.0 / target_fps);
