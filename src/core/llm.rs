@@ -1,15 +1,15 @@
 use anyhow::{Error as E, Result};
 use candle_core::{Tensor, Device, DType, IndexOp};
+use candle_transformers::models::quantized_llama::ModelWeights as Llama;
 use candle_transformers::generation::LogitsProcessor;
 use tokenizers::Tokenizer;
 use crate::core::thought::{Thought, MindVoice};
-use crate::core::quantized_gemma_raw::ModelWeights as Gemma;
 use rand::Rng;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 
-const MODEL_FILE: &str = "models/gemma-2b-it.Q4_K_M.gguf"; 
-const TOKENIZER_FILE: &str = "models/tokenizer.json"; 
+const MODEL_FILE: &str = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"; 
+const TOKENIZER_FILE: &str = "tokenizer_tinyllama.json"; 
 
 pub struct CortexInput {
     pub text: String,
@@ -29,7 +29,7 @@ pub struct CortexOutput {
 }
 
 pub struct CognitiveCore {
-    model: Gemma,
+    model: Llama,
     tokenizer: Tokenizer,
     device: Device,
     logits_processor: LogitsProcessor,
@@ -50,7 +50,7 @@ impl CognitiveCore {
         thread::spawn(move || {
             match Self::new(thread_thought_tx.clone()) {
                 Ok(mut core) => {
-                    let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "🧠 Cortex (Gemma): ONLINE (Stream Mode)".to_string()));
+                    let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "🧠 Cortex (TinyLlama): ONLINE (Stream Mode)".to_string()));
                     
                     loop {
                         let msg = match input_rx.recv() {
@@ -125,10 +125,10 @@ impl CognitiveCore {
         })
     }
 
-    fn load_model(device: &Device) -> Result<Gemma> {
+    fn load_model(device: &Device) -> Result<Llama> {
         let mut file = std::fs::File::open(MODEL_FILE).map_err(|e| E::msg(format!("No encuentro {}: {}", MODEL_FILE, e)))?;
         let content = candle_core::quantized::gguf_file::Content::read(&mut file)?;
-        let model = Gemma::from_gguf(content, &mut file, device)?;
+        let model = Llama::from_gguf(content, &mut file, device)?;
         Ok(model)
     }
 
@@ -192,6 +192,7 @@ impl CognitiveCore {
         let mut pos = 0;
         
         let input_tensor = Tensor::new(token_ids.as_slice(), &self.device)?.unsqueeze(0)?;
+        eprintln!("[INFO] LLM Initial forward pass ({} tokens)...", token_ids.len());
         let logits = self.model.forward(&input_tensor, pos)?;
         let mut logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
         
@@ -208,7 +209,8 @@ impl CognitiveCore {
 
         let mut current_word = String::new();
 
-        for _ in 0..max_tokens {
+        for i in 0..max_tokens {
+            if i % 10 == 0 { eprintln!("[INFO] Generating token {}/{}...", i, max_tokens); }
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
             let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;

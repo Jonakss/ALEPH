@@ -656,8 +656,9 @@ async fn run_headless() -> Result<(), anyhow::Error> {
     println!("  Type 'quit' to exit.");
     println!("===========================================\n");
     
-    // Initialize LLM
+    // Initialize Core Systems
     let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
+    let chemistry = core::chemistry::Neurotransmitters::new();
     
     // Background thought printer
     let printer_rx = rx_thoughts;
@@ -670,13 +671,17 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 MindVoice::Chem => "🧪 BIO",
                 MindVoice::Sensory => "👂 EAR",
             };
+            if thought.text.trim().is_empty() { continue; }
             println!("\n[{}] {}", label, thought.text);
             print!("> ");
             let _ = io::stdout().flush();
         }
     });
 
-    let (tx_cortex, rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
+    // Spawn Hippocampus (Memory)
+    let (tx_mem, _rx_mem_stats, _rx_mem_log) = core::hippocampus::Hippocampus::spawn()?;
+
+    let (tx_cortex, _rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
         Ok((tx, rx)) => {
             println!("✅ Neocortex ONLINE");
             (Some(tx), Some(rx))
@@ -686,6 +691,23 @@ async fn run_headless() -> Result<(), anyhow::Error> {
             return Err(e);
         }
     };
+
+    // System Ticking Thread (Bio-logic)
+    let ticker_thoughts = tx_thoughts.clone();
+    thread::spawn(move || {
+        let mut chem = core::chemistry::Neurotransmitters::new();
+        loop {
+            // Very slow metabolic tick for headless
+            chem.tick(0.1, 5.0, false, 0.0, 100, 1.0);
+            
+            if rand::random::<f32>() < 0.20 {
+                let _ = ticker_thoughts.send(Thought::new(MindVoice::Chem, 
+                    format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)));
+            }
+            
+            thread::sleep(Duration::from_millis(1000));
+        }
+    });
     
     // Simple REPL loop
     let stdin = io::stdin();
@@ -708,31 +730,25 @@ async fn run_headless() -> Result<(), anyhow::Error> {
         
         // Send to LLM
         if let Some(ref tx) = tx_cortex {
+            let bio_desc = format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chemistry.adenosine, chemistry.dopamine, chemistry.cortisol);
             let _ = tx.send(CortexInput {
                 text: input.clone(),
                 somatic_state: String::new(),
                 long_term_memory: None,
-                bio_state: "Headless mode".to_string(),
+                bio_state: bio_desc,
                 cognitive_impairment: 0.0,
                 _cpu_load: 0.0,
                 _ram_pressure: 0.0,
                 entropy: 0.5,
-                adenosine: 0.0,
+                adenosine: chemistry.adenosine,
+            });
+            
+            // Send to memory too
+            let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+                text: input, 
+                entropy: 0.5 
             });
         }
-        
-        // Final response will be printed by the background thread via rx_thoughts
-        // But we can also wait for the CortexOutput for timing
-        if let Some(ref rx) = rx_cortex_out {
-            if let Ok(output) = rx.recv_timeout(std::time::Duration::from_secs(120)) {
-                println!("\n[INFO] Inference latency: {}ms", output.inference_latency_ms);
-            } else {
-                println!("\n⏱️  (Inference timeout)");
-            }
-        }
-        
-        print!("> ");
-        io::stdout().flush()?;
     }
     
     Ok(())
