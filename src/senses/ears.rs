@@ -144,19 +144,18 @@ impl AudioListener {
                             .sum::<f32>() / (end - start).max(1) as f32
                     };
 
-                    // MECHANICAL HONESTY: No normalization tricks
-                    // Raw FFT magnitude, minimal scaling
-                    // If audio is quiet, it IS quiet
+                    // MECHANICAL HONESTY: No normalización
+                    // No controlamos lo que el oído siente. Lo que llega, llega.
+                    // El único control real: taparse las orejas (set_mute).
                     let raw_bass = get_magnitude(&spectrum_buffer, 1, 6);
                     let raw_mids = get_magnitude(&spectrum_buffer, 6, 46);
                     let raw_highs = get_magnitude(&spectrum_buffer, 46, 200);
                     
-                    // Only divide by FFT length, no "boost" or "sensitivity"
                     let scale = fft_len as f32;
                     (
-                        (raw_bass / scale).clamp(0.0, 1.0),
-                        (raw_mids / scale).clamp(0.0, 1.0),
-                        (raw_highs / scale).clamp(0.0, 1.0)
+                        raw_bass / scale,
+                        raw_mids / scale,
+                        raw_highs / scale
                     )
                 } else {
                     (0.0, 0.0, 0.0) // Skip FFT this frame if mutex busy

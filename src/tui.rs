@@ -99,7 +99,7 @@ pub fn ui(
     // Prepare Data for Gradient Bars
     let spectrum = &telemetry.audio_spectrum;
     
-    // Normalize values 0.0 - 1.0 (FFT already normalized in ears.rs)
+    // Clamp solo para visualización (medidor tiene rango finito). Backend recibe valores crudos.
     let val_bass = spectrum.bass.clamp(0.0, 1.0);
     let val_mids = spectrum.mids.clamp(0.0, 1.0);
     let val_highs = spectrum.highs.clamp(0.0, 1.0);
