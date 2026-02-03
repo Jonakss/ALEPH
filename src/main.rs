@@ -749,6 +749,20 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 entropy: 0.5 
             });
         }
+        
+        // Wait for and print the final consolidated response
+        if let Some(ref rx) = _rx_cortex_out {
+             match rx.recv_timeout(Duration::from_secs(60)) {
+                 Ok(output) => {
+                     println!("\n[🧠 ALEPH FINAL] {}\n", output.text);
+                     println!("[INFO] Latency: {}ms", output.inference_latency_ms);
+                 },
+                 Err(_) => println!("\n⏱️  (Inference timeout waiting for final response)"),
+             }
+        }
+        
+        print!("> ");
+        let _ = io::stdout().flush();
     }
     
     Ok(())

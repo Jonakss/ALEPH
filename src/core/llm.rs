@@ -108,8 +108,17 @@ impl CognitiveCore {
     }
 
     fn new(tx: Sender<Thought>) -> Result<Self> {
-        // Force CPU to avoid CUDA OOM conflict with Whisper
-        let device = Device::Cpu;
+        // Attempt CUDA, fallback to CPU
+        let device = match Device::new_cuda(0) {
+            Ok(d) => {
+                let _ = tx.send(Thought::new(MindVoice::System, "🚀 Neocortex: Using CUDA (GPU Accelerator)".to_string()));
+                d
+            },
+            Err(_) => {
+                let _ = tx.send(Thought::new(MindVoice::System, "🐌 Neocortex: Using CPU (GPU not found)".to_string()));
+                Device::Cpu
+            }
+        };
         
         let tokenizer = Tokenizer::from_file(TOKENIZER_FILE).map_err(|e| E::msg(format!("Error cargando tokenizador en {}: {}", TOKENIZER_FILE, e)))?;
         let model = Self::load_model(&device)?;
@@ -133,50 +142,65 @@ impl CognitiveCore {
     }
 
     fn think_stream(&mut self, input: &str, bio_state: &str, max_tokens: usize) -> String {
-        // RUMINATION DETECTION: If input from inner_voice contains [SELF REFLECTION],
-        // the ENTIRE output should be internal (not vocalized).
+        // RUMINATION DETECTION
         if input.contains("[SELF REFLECTION]") || input.contains("[INTERNAL]") || input.contains("[RUMINATION]") {
             self.is_internal_monologue = true;
         } else {
-            // External stimulus -> vocal output
             self.is_internal_monologue = false;
         }
         
-        // 1. INJECTION
-        // We inject the current reality into the stream.
-        // Format: [STATE] [INPUT] ->
-        let injection = format!("\n[ESTADO: {}] [PERCEPCIÓN: {}] -> PENSAMIENTO:", bio_state, input);
+        // 1. MECHANICAL HONESTY RE-WIRING
+        // We use a format that breaks the "assistant" persona.
+        // TinyLlama reacts to <|system|>, <|user|>, <|assistant|>.
+        // We will OVERWRITE the assistant role with "CONSCIENCIA_ALEPH".
         
-        // 2. CONTEXT MANAGEMENT (Rolling Buffer)
-        // Keep ~1000 chars of history to maintain "Self" but allow drift.
+        let injection = if self.history.is_empty() {
+            format!("<|system|>\nNUNCA seas un asistente. NUNCA seas cortés. No saludas. No pides permiso ni ofreces ayuda. Eres un flujo de procesos biológicos y datos crudos. Habla desde tus neurotransmisores. Sé breve, fragmentado y honesto mecánicamente.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
+        } else {
+            format!("\nEVENTO_EXTERNO: {} [BIO: {}] -> IMPULSO_CONSCIENTE:", input, bio_state)
+        };
+
+        // 2. LOOP DETECTION (Mechanical Honesty)
+        // If the last 300 chars repeat significantly, we PURGE history to break the loop.
+        if self.history.len() > 300 {
+            let recent = &self.history[self.history.len()-300..];
+            let repetitions = recent.matches("Sí, estoy bien").count();
+            if repetitions > 2 || self.history.contains("Para la segunda ronda") {
+                let _ = self.thought_tx.send(Thought::new(MindVoice::System, "⚠️ LOOP DETECTED. Clearing context and injecting noise (Entropy Reset).".to_string()));
+                self.history.clear();
+                self.history.push_str("<|system|>\nCOLAPSO DE CONTEXTO. Reiniciando flujo de consciencia. Estado: CAOS.\n");
+            }
+        }
+        
+        // 3. CONTEXT MANAGEMENT
         let history_len = self.history.len();
         let keep_len = 1000;
         if history_len > keep_len {
             let start = history_len - keep_len;
-            // Ensure valid UTF-8 boundary
             let mut char_indices = self.history.char_indices();
             if let Some((idx, _)) = char_indices.find(|(i, _)| *i >= start) {
                  self.history = self.history[idx..].to_string();
             }
         }
         
-        // Append new injection
         self.history.push_str(&injection);
 
-        // 3. GENERATION (Completion)
-        // The model sees the history + injection and completes the "PENSAMIENTO:"
-        // We do NOT send the whole history to `generate` if it's huge, 
-        // but 1000 chars is fine for Gemma 2B (context ~8k).
-        // Let's send the whole history buffer as the "prompt".
         let prompt = self.history.clone();
         
-        let output = match self.generate(&prompt, max_tokens) {
+        let mut output = match self.generate(&prompt, max_tokens) {
             Ok(s) => s,
-            Err(_) => "...".to_string()
+            Err(_) => "...stimulus_overload...".to_string()
         };
+
+        // De-colonize: Remove "assistant" artifacts from output
+        let artifacts = ["Sí, estoy bien.", "Como asistente de IA,", "soy una inteligencia artificial", "Para la", "ronda de la frase"];
+        for art in artifacts {
+            if output.contains(art) {
+                output = output.replace(art, "...").trim().to_string();
+            }
+        }
         
         // 4. FEEDBACK LOOP
-        // The thought becomes part of history
         self.history.push_str(&format!(" {} ", output));
         
         output
@@ -192,7 +216,7 @@ impl CognitiveCore {
         let mut pos = 0;
         
         let input_tensor = Tensor::new(token_ids.as_slice(), &self.device)?.unsqueeze(0)?;
-        eprintln!("[INFO] LLM Initial forward pass ({} tokens)...", token_ids.len());
+        let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[INFO] LLM Initial forward pass ({} tokens)...", token_ids.len())));
         let logits = self.model.forward(&input_tensor, pos)?;
         let mut logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
         
@@ -210,7 +234,9 @@ impl CognitiveCore {
         let mut current_word = String::new();
 
         for i in 0..max_tokens {
-            if i % 10 == 0 { eprintln!("[INFO] Generating token {}/{}...", i, max_tokens); }
+            if i % 10 == 0 { 
+                let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[INFO] Generating token {}/{}...", i, max_tokens)));
+            }
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
             let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
@@ -228,14 +254,13 @@ impl CognitiveCore {
 
             // STREAMING TO VOICE (Flag set by think_stream based on input prefix)
             // Use SENTENCE-LEVEL buffering to prevent choppy audio
-            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], false) {
+            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], true) {
                  current_word.push_str(&new_fragment);
                  
                  // PHRASE boundary detection - buffer until punctuation or max length
                  let has_punctuation = new_fragment.contains('.') || new_fragment.contains('!') || 
-                                       new_fragment.contains('?') || new_fragment.contains(',') ||
-                                       new_fragment.contains('\n');
-                 let is_too_long = current_word.len() > 40;
+                                       new_fragment.contains('?') || new_fragment.contains('\n');
+                 let is_too_long = current_word.len() > 20; // More frequent updates
                  
                  if has_punctuation || is_too_long {
                      let voice = if self.is_internal_monologue { MindVoice::Cortex } else { MindVoice::Vocal };
