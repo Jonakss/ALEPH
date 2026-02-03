@@ -224,6 +224,7 @@ pub fn ui(
             crate::core::thought::MindVoice::Cortex => ("[CPU]", Color::Green),
             crate::core::thought::MindVoice::Chem => ("[BIO]", Color::Magenta),
             crate::core::thought::MindVoice::System => ("[SYS]", Color::DarkGray),
+            crate::core::thought::MindVoice::Vocal => ("[VOCAL]", Color::White),
         };
         timeline_lines.push(Line::from(vec![
             Span::styled(format!("{:5} ", label), Style::default().fg(color).add_modifier(Modifier::BOLD)),

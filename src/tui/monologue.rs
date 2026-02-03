@@ -18,6 +18,7 @@ pub fn render_monologue<'a>(thoughts: &'a [Thought], insight_intensity: f32) -> 
                 MindVoice::Cortex => ("[CORTEX] ", Color::Green),
                 MindVoice::Chem => ("[CHEM]   ", Color::Magenta),
                 MindVoice::System => ("[SYSTEM] ", Color::DarkGray),
+                MindVoice::Vocal => ("[VOCAL]  ", Color::White),
             };
 
             let line = Line::from(vec![

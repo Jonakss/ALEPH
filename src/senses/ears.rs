@@ -34,7 +34,7 @@ impl AudioListener {
         };
         
         let state = Arc::new(Mutex::new(ctx));
-        let is_muted = Arc::new(Mutex::new(true)); 
+        let is_muted = Arc::new(Mutex::new(false)); // START LISTENING
         let attention_threshold = Arc::new(Mutex::new(0.001)); // MAX SENSITIVITY
 
         // 2. Setup Audio Input

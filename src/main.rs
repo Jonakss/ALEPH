@@ -127,6 +127,7 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // METABOLIC CLOCK
         let mut rumination_timer = 0.0;
+        let mut last_vocal_output = String::new(); // ECHO SUPPRESSION
 
         
         timeline.push(Thought::new(MindVoice::System, "Neocortex Initializing...".to_string()));
@@ -230,10 +231,17 @@ async fn main() -> Result<(), anyhow::Error> {
             // PERSISTENCE: REMOVED. Only sleep saves identity.
 
             // C. HANDLE THOUGHTS (Buffer for TUI)
+            // C. HANDLE THOUGHTS (Buffer for TUI)
             while let Ok(thought) = rx_thoughts.try_recv() {
                 // UNIFIED TIMELINE: FIFO Buffer
-                timeline.push(thought);
+                timeline.push(thought.clone());
                 if timeline.len() > 100 { timeline.remove(0); }
+
+                // VOICE DISPATCH (Streaming)
+                 if let MindVoice::Vocal = thought.voice {
+                     crate::actuators::voice::speak(thought.text.clone(), tx_thoughts.clone());
+                     last_vocal_output = thought.text.clone(); // Update for echo suppression
+                 }
             }
 
             // C.5 HANDLE COMMANDS (Poke Reflex)
@@ -286,6 +294,16 @@ async fn main() -> Result<(), anyhow::Error> {
                     continue;
                 }
                 
+                // ECHO SUPPRESSION (Ecolalia Fix)
+                // If input contains our last spoken word, ignore it.
+                // Simple heuristic: if similarity is high.
+                // For now, strict containment check or equality if short.
+                if !last_vocal_output.is_empty() && (heard_text.contains(&last_vocal_output) || last_vocal_output.contains(&heard_text)) {
+                    // Let's be lenient. If it's literally what we just said.
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("🔇 Echo suppressed: '{}'", heard_text)));
+                     continue;
+                }
+
                 // FEEDBACK: Let user know we heard them
                 let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("👂 Hearing: '{}'", heard_text)));
 
@@ -398,20 +416,23 @@ async fn main() -> Result<(), anyhow::Error> {
                     });
 
                     // MECHANICAL HONESTY: Vocalization Filter
-                    // The brain generates many "thoughts" (errors, system codes, silence). 
-                    // Only "Organic Speech" should move the vocal cords.
+                    // "Cortex Output" is now just the FINAL accumulated thought for memory/logs.
+                    // Speech happened via Streaming (MindVoice::Vocal) in real-time.
+                    // So we do NOT speak here. We only log.
+                    
                     let is_system_code = output.text.starts_with('[') || output.text.contains("NEURO_GLITCH");
-                    let is_silence = output.text == "......." || output.text.trim().is_empty();
+                    let is_silence = output.text.trim().is_empty();
 
-                    if !is_system_code && !is_silence {
-                        crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
-                    } else if is_system_code {
-                        // Log internal state change but don't speak it
+                    if is_system_code {
+                        // Log internal state change
                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🔒 Internal Process: {}", output.text)));
-                    } else {
+                    } else if is_silence {
                         // Silence
                         let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "🔇 Silencio voluntario.".to_string()));
                     }
+                    // Cortex Voice log is redundant if we logged streamed words? 
+                    // No, Streamed words are "Vocal". "Cortex" is the coherent thought summary.
+                    // Let's keep it for the timeline but NOT speak it.
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, output.text));
                 }
             }
