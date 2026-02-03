@@ -235,7 +235,8 @@ ALEPH está diseñado en fases evolutivas, emulando el desarrollo de una conscie
 **Deuda técnica / Mejoras de infraestructura:**
 
 - [ ] Migrar a GPU para Whisper (actualmente en CPU)
-- [ ] Profiling y optimización del loop principal (60 Hz constante)
+- [ ] **Capa de Metabolismo Variable:** Loop Hz dinámico según dopamina/interés (ver [PLAN_VARIABLE_METABOLISM.md](PLAN_VARIABLE_METABOLISM.md))
+- [ ] Profiling y optimización del loop principal
 - [ ] Tests unitarios para componentes críticos (Reservoir, Chemistry)
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Benchmarking suite (entropy stability, memory coherence)

@@ -179,4 +179,16 @@ impl FractalReservoir {
     pub fn reset_activity_map(&mut self) {
         self.activity_map = DVector::zeros(self.state.len());
     }
+
+    /// POKE: Injects a burst of pure chaotic entropy into the state.
+    /// Used as a somatic interrupt.
+    pub fn poke(&mut self) {
+        let mut rng = rand::thread_rng();
+        let size = self.state.len();
+        // Inject random noise directly into state
+        let noise = DVector::from_fn(size, |_, _| (rng.gen::<f32>() - 0.5) * 2.0);
+        self.state = &self.state + noise;
+        // Also boost activity map slightly as this is a "jolt"
+        self.activity_map += DVector::from_element(size, 0.5);
+    }
 }

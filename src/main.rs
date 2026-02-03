@@ -10,6 +10,11 @@ use crate::core::reservoir::FractalReservoir;
 use crate::core::thought::{MindVoice, Thought};
 use nalgebra::DVector;
 use std::{thread, time::{Duration, Instant}};
+use anyhow::Result;
+
+enum BackendCommand {
+    Poke,
+}
 use std::sync::mpsc;
 use rand::prelude::*;
 use std::io;
@@ -37,8 +42,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Canal Telemetria: Backend -> Frontend (TUI)
+    // Communication Channels
     let (tx_telemetry, rx_telemetry) = mpsc::channel::<tui::Telemetry>();
+    let (tx_cmd, rx_cmd) = mpsc::channel::<BackendCommand>();
 
     // --- THREAD BACKEND (Cerebro) ---
     thread::spawn(move || {
@@ -63,6 +69,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ears.set_mute(true); // Mute during warmup
 
         let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
+        let mut previous_spectrum = senses::ears::AudioSpectrum::default();
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
         let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<CortexOutput>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
@@ -109,20 +116,31 @@ async fn main() -> Result<(), anyhow::Error> {
              let _time_since_active = tactile.check_activity();
              while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
 
-             // B. UPDATE AUDIO SPECTRUM (Real-Time)
-             while let Ok(spectrum) = rx_spectrum.try_recv() {
-                 current_spectrum = spectrum; 
-             }
+             // A. UPDATE SENSES
+            previous_spectrum = current_spectrum.clone();
+            if let Ok(spec) = rx_spectrum.try_recv() {
+                current_spectrum = spec;
+            }
              let current_stimulus = current_spectrum.rms;
 
-             // B.2 SENSORY HEARTBEAT (Periodic Audio Reactions)
-             // Every ~2 seconds, if audio is interesting, generate a thought
-             if rng.gen_bool(0.03) { // ~3% chance per tick @ 60Hz = every ~0.5s on avg
-                 if current_spectrum.bass > 0.3 {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "🔊 Bass resonance felt...".to_string()));
-                 } else if current_spectrum.rms > 0.1 {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "🎧 Ambient audio detected.".to_string()));
+             // B.2 SENSORY REACTIONS (Delta Sensing - MECHANICAL HONESTY)
+             // Instead of absolute threshold, we react to CHANGE (Delta)
+             let delta_bass = (current_spectrum.bass - previous_spectrum.bass).abs();
+             let delta_rms = (current_spectrum.rms - previous_spectrum.rms).abs();
+
+             if delta_bass > 0.15 || delta_rms > 0.1 {
+                 if rng.gen_bool(0.1) {
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "⚠️ Audio shift detected.".to_string()));
                  }
+                 // Delta increases dopamine (interest) and cortisol (startle)
+                 chemistry.dopamine += 0.05;
+                 chemistry.cortisol += 0.02;
+             }
+
+             if delta_rms > 0.4 { // Sudden loud noise
+                 let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "💥 STARTLE REFLEX: Sudden amplitude spike!".to_string()));
+                 chemistry.cortisol += 0.3;
+                 chemistry.adenosine += 0.05;
              }
              
              // B.3 ENTROPY REACTIONS (Rare, only extreme states)
@@ -181,6 +199,17 @@ async fn main() -> Result<(), anyhow::Error> {
             while let Ok(thought) = rx_thoughts.try_recv() {
                 thought_buffer.push(thought);
                 if thought_buffer.len() > 30 { thought_buffer.remove(0); }
+            }
+
+            // C.5 HANDLE COMMANDS (Poke Reflex)
+            while let Ok(cmd) = rx_cmd.try_recv() {
+                match cmd {
+                    BackendCommand::Poke => {
+                        ego.poke();
+                        chemistry.cortisol += 0.4; // Jolt creates stress
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💥 [POKE] Somatic interrupt triggered!".to_string()));
+                    }
+                }
             }
 
             // D. HANDLE HEARING (Cognitive & Memory)
@@ -370,6 +399,9 @@ async fn main() -> Result<(), anyhow::Error> {
             if let Event::Key(key) = event::read()? {
                 if key.code == KeyCode::Char('q') {
                     break;
+                }
+                if key.code == KeyCode::Char('p') || key.code == KeyCode::Char(' ') {
+                    let _ = tx_cmd.send(BackendCommand::Poke);
                 }
             }
         }
