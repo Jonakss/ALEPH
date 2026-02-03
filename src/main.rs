@@ -656,12 +656,29 @@ async fn run_headless() -> Result<(), anyhow::Error> {
     println!("  Type 'quit' to exit.");
     println!("===========================================\n");
     
-    // Initialize LLM only
+    // Initialize LLM
     let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
     
+    // Background thought printer
+    let printer_rx = rx_thoughts;
+    thread::spawn(move || {
+        while let Ok(thought) = printer_rx.recv() {
+            let label = match thought.voice {
+                MindVoice::Cortex => "🧠 CORTEX",
+                MindVoice::Vocal => "🗣️ VOCAL",
+                MindVoice::System => "⚙️ SYS",
+                MindVoice::Chem => "🧪 BIO",
+                MindVoice::Sensory => "👂 EAR",
+            };
+            println!("\n[{}] {}", label, thought.text);
+            print!("> ");
+            let _ = io::stdout().flush();
+        }
+    });
+
     let (tx_cortex, rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
         Ok((tx, rx)) => {
-            println!("✅ Cortex (LLM) ONLINE");
+            println!("✅ Neocortex ONLINE");
             (Some(tx), Some(rx))
         },
         Err(e) => {
@@ -704,27 +721,14 @@ async fn run_headless() -> Result<(), anyhow::Error> {
             });
         }
         
-        // Wait for response
+        // Final response will be printed by the background thread via rx_thoughts
+        // But we can also wait for the CortexOutput for timing
         if let Some(ref rx) = rx_cortex_out {
-            match rx.recv_timeout(std::time::Duration::from_secs(60)) {
-                Ok(output) => {
-                    println!("\n🧠 ALEPH: {}\n", output.text);
-                },
-                Err(_) => {
-                    println!("\n⏱️  (timeout waiting for response)\n");
-                }
+            if let Ok(output) = rx.recv_timeout(std::time::Duration::from_secs(120)) {
+                println!("\n[INFO] Inference latency: {}ms", output.inference_latency_ms);
+            } else {
+                println!("\n⏱️  (Inference timeout)");
             }
-        }
-        
-        // Also print any thoughts
-        while let Ok(thought) = rx_thoughts.try_recv() {
-            println!("[{}] {}", match thought.voice {
-                MindVoice::Cortex => "CORTEX",
-                MindVoice::Vocal => "VOCAL",
-                MindVoice::System => "SYS",
-                MindVoice::Chem => "BIO",
-                MindVoice::Sensory => "EAR",
-            }, thought.text);
         }
         
         print!("> ");
