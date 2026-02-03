@@ -81,9 +81,12 @@ async fn main() -> Result<(), anyhow::Error> {
         };
         
         // 4.5 Inner Voice (Silent Rumination Thread)
-        if let Some(ref tx) = tx_cortex {
-            core::inner_voice::spawn_inner_voice(tx.clone(), tx_thoughts.clone());
-        }
+        // Now triggered by Metabolic Pulse (Biology drives Thought)
+        let tx_inner_pulse = if let Some(ref tx) = tx_cortex {
+            Some(core::inner_voice::spawn_inner_voice(tx.clone(), tx_thoughts.clone()))
+        } else {
+            None
+        };
 
         // 5. Otros Sentidos
         let (tx_body, rx_body) = mpsc::channel::<senses::proprioception::BodyStatus>();
@@ -108,6 +111,10 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut growth_counter = 0; // Robust neurogenesis counter
         let mut observer_logs: Vec<String> = Vec::new(); // Persistent logs for TUI
         let mut hippocampus_total_memories = 0; // MECHANICAL HONESTY: True weight of memory
+        
+        // METABOLIC CLOCK
+        let mut rumination_timer = 0.0;
+        let mut target_fps = 60.0;
         
         observer_logs.push("Neocortex Initializing...".to_string());
 
@@ -399,9 +406,28 @@ async fn main() -> Result<(), anyhow::Error> {
             // previous_spectrum is already updated at the top of loop. 
             // We can remove the redundant update here to satisfy lints.
 
+            // H. METABOLIC CLOCK (Variable Hz & Thought Rate)
+            // 1. Calculate Rumination Threshold (Bio-Time)
+            // Base: 20s. Dopamine speeds it up (10s). Adenosine slows it down (60s).
+            let rumination_threshold = 20.0 * (1.0 + chemistry.adenosine * 2.0) / (1.0 + chemistry.dopamine);
+            
+            rumination_timer += delta_time;
+            if rumination_timer > rumination_threshold {
+                rumination_timer = 0.0;
+                if let Some(ref tx) = tx_inner_pulse {
+                    let _ = tx.send(()); // TRIGGER THOUGHT
+                }
+            }
+
+            // 2. Calculate Target FPS (Time Dilation)
+            // Base 60Hz. Adenosine drags it down to 15Hz (Sluggishness).
+            // Dopamine boosts it slightly to 75Hz (Flow).
+            target_fps = (60.0 * (1.0 + chemistry.dopamine * 0.2) * (1.0 - chemistry.adenosine * 0.7)).clamp(15.0, 75.0);
+
             let elapsed = start.elapsed();
-            if elapsed < Duration::from_millis(1000 / FRECUENCIA_HZ) {
-                thread::sleep(Duration::from_millis(1000 / FRECUENCIA_HZ) - elapsed);
+            let frame_duration = Duration::from_secs_f32(1.0 / target_fps);
+            if elapsed < frame_duration {
+                thread::sleep(frame_duration - elapsed);
             }
         }
     });

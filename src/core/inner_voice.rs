@@ -6,23 +6,21 @@ use crate::core::llm::CortexInput;
 use rand::Rng;
 
 /// Inner Voice - Silent rumination thread
-/// Every ~30 seconds, takes the last thought and reflects on it internally.
+/// TRIGGERED BY BODY PULSE.
 /// Creates internal dialogue that is NOT vocalized, only logged to Stream of Consciousness.
 pub fn spawn_inner_voice(
     tx_cortex: Sender<CortexInput>,
     tx_thoughts: Sender<Thought>,
-) {
+) -> Sender<()> {
+    let (tx_pulse, rx_pulse) = std::sync::mpsc::channel();
+
     thread::spawn(move || {
-        // Wait for system to stabilize
-        thread::sleep(Duration::from_secs(60));
-        
-        let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🧠 Inner Voice: Thread Active.".to_string()));
+        let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🧠 Bio-Clock: Inner Voice Synced.".to_string()));
         
         let mut last_rumination = String::new();
         
-        loop {
-            thread::sleep(Duration::from_secs(30));
-            
+        // Wait for body pulse
+        while let Ok(_) = rx_pulse.recv() {
             // MECHANICAL HONESTY: Rumination seed based on Entropy & Random Chaos
             // Instead of hardcoded prompts, we use the randomness of the moment
             let entropy_seed: u8 = rand::thread_rng().gen();
@@ -58,4 +56,6 @@ pub fn spawn_inner_voice(
             let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💭 Rumiación: '{}'", prompt)));
         }
     });
+
+    tx_pulse
 }
