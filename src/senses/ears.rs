@@ -41,6 +41,8 @@ impl AudioListener {
         let host = cpal::default_host();
         let device = host.default_input_device().expect("no input device available");
         let config = device.default_input_config()?;
+        let sample_rate = config.sample_rate().0;
+        let _ = thought_tx.send(Thought::new(MindVoice::System, format!("Audio: Init at {}Hz", sample_rate)));
 
         // FFT Config
         let fft_len = 1024;
@@ -69,8 +71,15 @@ impl AudioListener {
                   params.set_print_realtime(false);
                   params.set_print_timestamps(false);
                   
-                  // Downsample (Simple decimation)
-                  let resampled: Vec<f32> = samples.iter().step_by(3).cloned().collect(); 
+                  // Proper Resampling (Target 16000Hz)
+                  let target_rate = 16000;
+                  let ratio = sample_rate as f32 / target_rate as f32;
+                  let mut resampled = Vec::new();
+                  let mut i = 0.0;
+                  while (i as usize) < samples.len() {
+                      resampled.push(samples[i as usize]);
+                      i += ratio;
+                  }
 
                   // Gag output
                   let _print_gag = gag::Gag::stdout().ok();
@@ -196,7 +205,7 @@ impl AudioListener {
                 if *recording {
                     buffer.extend_from_slice(data);
                     
-                    if *silence > 30 { // 30 frames ~ 0.5s silence
+                    if *silence > 45 { // ~0.75s silence (more generous)
                         *recording = false;
                         
                         // E. Send to Worker

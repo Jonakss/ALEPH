@@ -18,11 +18,13 @@ pub struct MemoryRecord {
     pub context_tags: Vec<String>, 
     #[serde(default)] 
     pub entropy: f32, // Intensity/Importance
+    #[serde(default)]
+    pub consolidated: bool, // True = Long Term (Disk), False = Volatile (RAM)
 }
 
 // --- VECTOR STORE (Base de Datos) ---
 pub struct VectorStore {
-    memories: Vec<MemoryRecord>,
+    pub memories: Vec<MemoryRecord>,
     model: BertModel,
     tokenizer: Tokenizer,
     device: Device,
@@ -67,7 +69,7 @@ impl VectorStore {
     }
 
     /// Genera el Embedding (Vector) de un texto
-    fn embed(&self, text: &str) -> Result<Vec<f32>> {
+    pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
         let tokens = self.tokenizer.encode(text, true).map_err(|e| anyhow::anyhow!(e))?;
         let token_ids = Tensor::new(tokens.get_ids(), &self.device)?.unsqueeze(0)?;
         let token_type_ids = Tensor::new(tokens.get_type_ids(), &self.device)?.unsqueeze(0)?;
@@ -97,10 +99,26 @@ impl VectorStore {
             timestamp,
             context_tags: tags,
             entropy,
+            consolidated: false,
         };
         
         self.memories.push(record);
         // Removed self.save_to_disk() -> Volatile until Consolidated
+        Ok(())
+    }
+
+    /// Optimized add: Allows passing an already computed embedding
+    pub fn add_precalculated(&mut self, text: String, embedding: Vec<f32>, tags: Vec<String>, entropy: f32) -> Result<()> {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        let record = MemoryRecord {
+            text,
+            embedding,
+            timestamp,
+            context_tags: tags,
+            entropy,
+            consolidated: false,
+        };
+        self.memories.push(record);
         Ok(())
     }
 
@@ -153,12 +171,28 @@ impl VectorStore {
         // Criterio de Consolidación: Entropía > 0.7 OR Reciente (< 1 min)? No, Sleep Cycle clears day.
         // User rule: "Solo los recuerdos asociados a estados de alta intensidad (Entropía > 0.7) se guardarán"
         
-        self.memories.retain(|m| m.entropy > 0.7);
+        // Criterio: Entropía > 0.7 (Alta intensidad)
+        self.memories.retain(|m| {
+            if m.entropy > 0.7 {
+                true // Keep (will be saved)
+            } else {
+                false // Prune (Forget weak memories)
+            }
+        });
+        
+        // Mark all remaining as consolidated
+        for mem in &mut self.memories {
+            mem.consolidated = true;
+        }
         
         let final_count = self.memories.len();
-        self.save_to_disk()?; // Persist NOW
+        self.save_to_disk()?; 
         
         Ok(initial_count - final_count) // Retorna cuantos olvidó
+    }
+
+    pub fn volatile_count(&self) -> usize {
+        self.memories.iter().filter(|m| !m.consolidated).count()
     }
 
     fn save_to_disk(&self) -> Result<()> {
@@ -177,6 +211,8 @@ impl VectorStore {
         if let Ok(content) = fs::read_to_string(&self.file_path) {
             if let Ok(memories) = serde_json::from_str(&content) {
                 self.memories = memories;
+                // Ensure loaded memories are marked consolidated
+                for m in &mut self.memories { m.consolidated = true; }
             }
         }
     }

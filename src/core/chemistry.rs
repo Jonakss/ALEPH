@@ -24,7 +24,7 @@ impl Neurotransmitters {
         // 1. ADENOSINA (Fatiga/Presión de Sueño)
         if is_dreaming {
             // Dormir limpia la fatiga - recuperación REAL
-            self.adenosine -= 0.01 * time_scale; 
+            self.adenosine -= 0.05 * time_scale; // 5x faster recovery
         } else {
             // Base fatigue from just being awake
             let base_fatigue = 0.0001 * time_scale;
@@ -49,12 +49,12 @@ impl Neurotransmitters {
         }
 
         // 2. DOPAMINA (Novedad/Recompensa)
-        // Decae naturalmente (Aburrimiento)
-        self.dopamine -= 0.0002 * time_scale; 
+        // Decae naturalmente (Aburrimiento) - Faster decay
+        self.dopamine -= 0.002 * time_scale; 
         
-        // Sube con la entropía (Novedad)
-        if entropy > 0.1 && entropy < 0.8 {
-            self.dopamine += 0.001 * time_scale;
+        // Sube con la actividad del reservorio (Solo si es intensa, indicando 'Eureka' o esfuerzo)
+        if entropy > 0.7 && entropy < 0.9 {
+            self.dopamine += 0.005 * time_scale;
         }
 
         // 3. CORTISOL (Estrés)
@@ -97,7 +97,7 @@ impl Neurotransmitters {
     /// Check if recovered enough to wake (HYSTERESIS - evita bucle colapso/despertar)
     /// Solo despertar cuando adenosina bajó significativamente, no en el borde del umbral
     pub fn is_recovered_to_wake(&self) -> bool {
-        self.adenosine < 0.6
+        self.adenosine < 0.3 // Deeper sleep required to wake
     }
     
     /// Get degradation factor for inference (brain fog)

@@ -53,9 +53,9 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // 2. Componentes Biológicos
         let mut chemistry = core::chemistry::Neurotransmitters::new();
-        // Base de Datos Vectorial (Hippocampus)
-        let mut hippocampus = core::hippocampus::Hippocampus::new()
-            .expect("HIPPOCAMPUS INIT FAILED: Check .onnx model");
+        // Base de Datos Vectorial (Hippocampus) - ASYNC
+        let (tx_mem, rx_mem, rx_mem_log) = core::hippocampus::Hippocampus::spawn()
+            .expect("HIPPOCAMPUS INIT FAILED");
 
         // 3. Sistema Sensorial (The Senses)
         // 3. Sistema Sensorial (The Senses)
@@ -104,7 +104,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut current_entropy = 0.0; // Track entropy for memory tagging
         let mut current_insight = 0.0; // Track max relevance for visual flash
         let mut current_novelty: f32 = 0.0; // Track last novelty score for TUI
-        let mut last_save_secs: u64 = 0; // For periodic persistence
+        // let mut last_save_secs: u64 = 0; // REMOVED: Mechanical Honesty (Persistence only on Sleep)
         let mut growth_counter = 0; // Robust neurogenesis counter
         let mut observer_logs: Vec<String> = Vec::new(); // Persistent logs for TUI
         
@@ -165,10 +165,13 @@ async fn main() -> Result<(), anyhow::Error> {
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Senses OPEN.".to_string()));
             }
 
-            // MECHANICAL ADENOSINE: Memory pressure creates fatigue floor
-            let max_volatile_memories = 500; // Before consolidation becomes critical
-            let memory_pressure = hippocampus.memory_count() as f32 / max_volatile_memories as f32;
-            chemistry.set_memory_pressure(memory_pressure);
+            // MECHANICAL ADENOSINE: Memory pressure (Updated inside memory rx block now)
+            // But we need a fallback if no memory events happen? 
+            // The chemistry.set_memory_pressure handles the "floor".
+            // We can leave it, but it needs the count.
+            // Since we don't have direct access to 'hippocampus', we rely on the last updated pressure
+            // which chemistry already holds (it's stateful).
+            // So we just remove the direct query here.
             
             // FORCED SLEEP: Body can only push so far
             if chemistry.is_body_failing() && !is_dreaming {
@@ -177,10 +180,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     "💀 ADENOSINE CRITICAL - Consciousness collapse. Forced consolidation.".to_string()));
                     
                 // Emergency consolidation
-                if let Ok(forgotten) = hippocampus.consolidate_sleep() {
-                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
-                        format!("💤 Emergency purge: {} memories consolidated.", forgotten)));
-                }
+                let _ = tx_mem.send(core::hippocampus::MemoryCommand::ConsolidateSleep);
                 ego.reset_activity_map();
             }
             
@@ -194,21 +194,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // SLEEP CONSOLIDATION (gradual during sleep)
             if is_dreaming && rng.gen_bool(0.01) {
-                if let Ok(forgotten) = hippocampus.consolidate_sleep() {
-                    if forgotten > 0 {
-                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💤 Sleep Cycle: Pruned {} weak memories.", forgotten)));
-                    }
-                }
+                let _ = tx_mem.send(core::hippocampus::MemoryCommand::ConsolidateSleep);
             }
 
-            // PERSISTENCE: Save identity to disk every 60s (MECHANICAL HONESTY - Principio 8)
-            let elapsed_secs = start_time.elapsed().as_secs();
-            if elapsed_secs >= 60 && elapsed_secs - last_save_secs >= 60 {
-                last_save_secs = elapsed_secs;
-                if let Err(e) = hippocampus.save() {
-                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("⚠️ Persistence failed: {}", e)));
-                }
-            }
+            // PERSISTENCE: REMOVED. Only sleep saves identity.
 
             // C. HANDLE THOUGHTS (Buffer for TUI)
             while let Ok(thought) = rx_thoughts.try_recv() {
@@ -232,81 +221,77 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
             }
 
-            // D. HANDLE HEARING (Cognitive & Memory)
+            // D. HANDLE HEARING (Async Memory Trigger)
             while let Ok(heard_text) = rx_ears.try_recv() {
-                // 1. Habituación (Boredom Sensor)
-                if let Ok(similarity) = hippocampus.check_novelty(&heard_text) {
-                     current_novelty = 1.0 - similarity; // NOVELTY = 1 - SIMILARITY
-                     if similarity > 0.85 {
-                         chemistry.adenosine += 0.1; // Increase Fatigue/Boredom
-                         let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("Boredom spike (Sim: {:.2})", similarity)));
-                     }
-                }
-
-                // 1.5 Startle Reflex (Susto Acústico)
-                // Use BASS energy (more reactive than RMS)
-                let audio_intensity = current_spectrum.bass.max(current_spectrum.mids);
-                if audio_intensity > 0.3 {
-                    chemistry.cortisol += 0.02; // Mild stress from audio
-                    if audio_intensity > 0.5 {
-                        chemistry.cortisol += 0.05; // Medium stress
-                        let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "⚠️ Elevated audio intensity!".to_string()));
-                    }
-                    if audio_intensity > 0.7 {
-                         chemistry.cortisol += 0.1; // PANIC
-                         let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "💥 LOUD NOISE DETECTED!".to_string()));
-                    }
-                }
-
-                // 2. Memorizar (Volatile RAM) + NEUROGENESIS
-                let _ = hippocampus.remember(&heard_text, "acoustic_input", current_entropy);
+                if is_dreaming { continue; }
                 
-                // MECHANICAL HONESTY: New memory = new neural connections
-                // Every 10 memories, grow 1-3 neurons (if under capacity)
-                 // MECHANICAL HONESTY: New memory = new neural connections
-                 // Every 10 memories, grow 1-3 neurons (if under capacity)
-                 growth_counter += 1;
-                 if growth_counter >= 5 && ego.current_size() < 300 { // Every 5 memories
+                // Send to Hippocampus for async processing
+                let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+                    text: heard_text, 
+                    entropy: current_entropy 
+                });
+            }
+
+            // D.2 HANDLE MEMORY OUTPUT (Delayed Cognitive Reaction)
+            // Log Messages from Hippocampus
+            while let Ok(log) = rx_mem_log.try_recv() {
+                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, log));
+            }
+
+            while let Ok(mem_out) = rx_mem.try_recv() {
+                // 1. Update Stats
+                current_novelty = mem_out.novelty;
+                
+                // 2. Neurochemistry Reaction
+                if mem_out.novelty > 0.85 {
+                     chemistry.adenosine += 0.1; // Boredom
+                } else {
+                     chemistry.dopamine += mem_out.novelty * 0.2; // Interest
+                }
+
+                // 3. Neurogenesis check
+                growth_counter += 1;
+                if growth_counter >= 5 && ego.current_size() < 300 {
                     growth_counter = 0;
-                    // High novelty = high growth multiplier
                     let growth = (current_novelty * 5.0).ceil() as usize; 
                     ego.neurogenesis(growth.clamp(1, 4));
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
                         format!("🌱 Structural Growth: +{} neurons (Pool: {})", growth.clamp(1, 4), ego.current_size())));
+                    observer_logs.push(format!("[BIO] 🌱 Growth: +{} neurons", growth.clamp(1, 4)));
                  }
 
-                // 3. Recordar (RAG)
-                // 3. Recordar (RAG)
+                // 4. Update Memory Pressure (Volatile Only)
+                // Assuming max 100 volatile thoughts before exhaustion
+                let pressure = mem_out.volatile_count as f32 / 100.0;
+                chemistry.set_memory_pressure(pressure);
 
-                let context = if let Some((ctx, score)) = hippocampus.recall_relevant(&heard_text) {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🧠 RAG: Insight (Score: {:.2})", score)));
-                     current_insight = score;
-                     Some(ctx)
-                } else {
-                     None
-                };
-
-                // 4. Enviar al Cortex
+                // 5. Send to Cortex (Now that we have Context)
                 if let Some(ref tx) = tx_cortex {
                     let cognitive_impairment = chemistry.get_cognitive_impairment();
-                    let bio_state = format!("{}. Fatiga cognitiva: {:.0}%", 
+                    let bio_state = format!("{}. Fatiga: {:.0}%", 
                         ego.get_state_description(), 
                         cognitive_impairment * 100.0);
-                    let somatic_desc = format!("CPU: {:.1}%", last_body_state.cpu_usage);
+                        
+                    let context_str = mem_out.retrieval.as_ref().map(|(s, _)| s.as_str());
                     
+                    // If we had a retrieval, that's an Insight
+                    if let Some((_, score)) = mem_out.retrieval {
+                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🧠 RAG: Insight (Score: {:.2})", score)));
+                         current_insight = score;
+                    }
+
                     let input = CortexInput {
-                        text: heard_text.clone(),
+                        text: mem_out.input_text.clone(),
                         bio_state,
-                        somatic_state: somatic_desc,
-                        long_term_memory: context,
-                        // MECHANICAL HONESTY: Hardware state for parametric modulation
+                        somatic_state: format!("CPU: {:.1}%", last_body_state.cpu_usage),
+                        long_term_memory: context_str.map(|s| s.to_string()),
                         cpu_load: last_body_state.cpu_usage,
                         ram_pressure: last_body_state.ram_usage,
                         cognitive_impairment,
                     };
                     let _ = tx.send(input);
                 } else {
-                    crate::actuators::voice::speak(heard_text, tx_thoughts.clone());
+                    crate::actuators::voice::speak(mem_out.input_text, tx_thoughts.clone());
                 }
             }
 
@@ -322,7 +307,12 @@ async fn main() -> Result<(), anyhow::Error> {
                             format!("🧠 Esfuerzo cognitivo: {:.1}s de latencia", latency_sec)));
                     }
                     
-                    let _ = hippocampus.remember(&output.text, "self_thought", current_entropy);
+                    // ASYNC SELF-MEMORY
+                    let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+                        text: output.text.clone(), 
+                        entropy: current_entropy 
+                    });
+
                     // MECHANICAL HONESTY: Voluntary silence = no vocalization
                     if output.text != "......." {
                         crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
@@ -384,10 +374,11 @@ async fn main() -> Result<(), anyhow::Error> {
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,
                   last_entropy_delta: 0.0,
-                  neuron_active_count: ego.current_size() + (hippocampus.memory_count() / 5), // Structural + Memory Density
+                  neuron_active_count: ego.current_size(), // Just structural count now
                   insight_intensity: current_insight, 
                   activity_map: ego.get_activity_snapshot(),
                   novelty_score: current_novelty,
+                  reservoir_state: ego.get_state_description(),
              };
             // Note: I missed passing `current_insight` into telem because of scope. 
             // I will fix this by declaring `let mut current_insight = 0.0;` at start of loop

@@ -28,6 +28,7 @@ pub struct Telemetry {
     pub logs: Vec<String>,     // Observer Logs
     pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
     pub novelty_score: f32, // Last novelty check result
+    pub reservoir_state: String, // Description of reservoir mood
 }
 
 impl Default for Telemetry {
@@ -49,6 +50,7 @@ impl Default for Telemetry {
             logs: Vec::new(),
             activity_map: vec![0.0; 100],
             novelty_score: 0.0,
+            reservoir_state: "Estable".to_string(),
         }
     }
 }
@@ -160,6 +162,7 @@ pub fn ui(
     };
 
     let mut stats_lines = vec![
+        Line::from(vec![Span::raw("Mood:   "), Span::styled(telemetry.reservoir_state.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))]),
         Line::from(vec![Span::raw("Status: "), Span::styled(telemetry.system_status.clone(), Style::default().fg(gauge_color).add_modifier(Modifier::BOLD))]),
         Line::from(vec![Span::raw(format!("Tick:   {:.1} Hz", telemetry.fps))]),
         Line::from(vec![Span::raw(format!("Brain:  {} nrns", telemetry.neuron_active_count))]),
