@@ -1,6 +1,6 @@
 use anyhow::{Error as E, Result};
 use candle_core::{Tensor, Device, DType, IndexOp};
-use crate::core::quantized_gemma_raw::ModelWeights as Gemma;
+use candle_transformers::models::quantized_llama::ModelWeights as Llama;
 use candle_transformers::generation::LogitsProcessor;
 use tokenizers::Tokenizer;
 use crate::core::thought::{Thought, MindVoice};
@@ -8,8 +8,8 @@ use rand::Rng;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 
-const MODEL_FILE: &str = "models/gemma-2b-it.Q4_K_M.gguf"; 
-const TOKENIZER_FILE: &str = "models/tokenizer.json"; 
+const MODEL_FILE: &str = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"; 
+const TOKENIZER_FILE: &str = "tokenizer_tinyllama.json"; 
 
 pub struct CortexInput {
     pub text: String,
@@ -108,7 +108,8 @@ impl CognitiveCore {
     }
 
     fn new(tx: Sender<Thought>) -> Result<Self> {
-        let device = Device::new_cuda(0).unwrap_or(Device::Cpu);
+        // Force CPU to avoid CUDA OOM conflict with Whisper
+        let device = Device::Cpu;
         
         let tokenizer = Tokenizer::from_file(TOKENIZER_FILE).map_err(E::msg)?;
         let model = Self::load_model(&device)?;

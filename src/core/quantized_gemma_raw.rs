@@ -1,7 +1,7 @@
 // Custom Gemma GGUF Loader for ALEPH
 // Based on candle-transformers quantized_llama but adapted for Gemma metadata keys
 
-use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
+use candle_core::{DType, Device, Module, Result, Tensor, D};
 use candle_core::quantized::{gguf_file, QMatMul};
 use std::collections::HashMap;
 
@@ -184,8 +184,8 @@ impl LayerWeights {
         // Gemma uses GeGLU: gate * up, then down
         let gate = self.ffn_gate.forward(&x_normed)?;
         let up = self.ffn_up.forward(&x_normed)?;
-        // GELU activation for gate
-        let gate = candle_nn::ops::gelu(&gate)?;
+        // GELU activation for gate (use Tensor method)
+        let gate = gate.gelu_erf()?;
         let ffn_out = self.ffn_down.forward(&(gate * up)?)?;
         
         // Residual connection for FFN
