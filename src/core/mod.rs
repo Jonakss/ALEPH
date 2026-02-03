@@ -9,4 +9,3 @@ pub mod thought;
 pub mod llm;
 pub mod memory_vector;
 pub mod inner_voice;
-pub mod quantized_gemma_raw;

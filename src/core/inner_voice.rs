@@ -30,11 +30,11 @@ pub fn spawn_inner_voice(
             let input = CortexInput {
                 text: format!("[SELF REFLECTION] {}", prompt),
                 bio_state: "Reflexión activa.".to_string(),
-                somatic_state: "Sistema estable.".to_string(),
-                long_term_memory: None,
+                _somatic_state: "Sistema estable.".to_string(),
+                _long_term_memory: None,
                 _cpu_load: 10.0,
                 _ram_pressure: 0.3,
-                cognitive_impairment: 0.0,
+                _cognitive_impairment: 0.0,
                 // Inner rumination assumes baseline stats, actual modification happens in Cortex
                 entropy: 0.5, 
                 adenosine: 0.3,
