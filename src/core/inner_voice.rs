@@ -47,8 +47,8 @@ pub fn spawn_inner_voice(
                 bio_state: "Reflexión activa.".to_string(),
                 somatic_state: "Sistema estable.".to_string(),
                 long_term_memory: None,
-                cpu_load: 10.0,
-                ram_pressure: 0.3,
+                _cpu_load: 10.0,
+                _ram_pressure: 0.3,
                 cognitive_impairment: 0.0,
                 // Inner rumination assumes baseline stats, actual modification happens in Cortex
                 entropy: 0.5, 

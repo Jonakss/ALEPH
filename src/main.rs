@@ -314,8 +314,8 @@ async fn main() -> Result<(), anyhow::Error> {
                         bio_state,
                         somatic_state: format!("CPU: {:.1}%", last_body_state.cpu_usage),
                         long_term_memory: context_str.map(|s| s.to_string()),
-                        cpu_load: last_body_state.cpu_usage,
-                        ram_pressure: last_body_state.ram_usage,
+                        _cpu_load: last_body_state.cpu_usage,
+                        _ram_pressure: last_body_state.ram_usage,
                         cognitive_impairment,
                         // DIRECT BIOLOGICAL FEEDBACK
                         entropy: current_entropy,
@@ -419,8 +419,7 @@ async fn main() -> Result<(), anyhow::Error> {
                  dopamine: chemistry.dopamine,
                  cortisol: chemistry.cortisol,
                   adenosine: chemistry.adenosine,
-                  cortisol: chemistry.cortisol,
-                  adenosine: chemistry.adenosine,
+
                   timeline: timeline.clone(), // Unified history
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,

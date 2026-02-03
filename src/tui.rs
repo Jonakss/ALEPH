@@ -46,7 +46,6 @@ impl Default for Telemetry {
             adenosine: 0.0,
             dopamine: 0.5,
             cortisol: 0.0,
-            cortisol: 0.0,
             insight_intensity: 0.0,
             timeline: Vec::new(),
             activity_map: vec![0.0; 100],
