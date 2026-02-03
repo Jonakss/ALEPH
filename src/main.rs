@@ -13,6 +13,7 @@ use std::{thread, time::{Duration, Instant}};
 use std::sync::mpsc;
 use rand::prelude::*;
 use std::io;
+use gag::Gag;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -29,6 +30,7 @@ const FRECUENCIA_HZ: u64 = 60;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // 0. TUI SETUP
+    let _stderr_gag = Gag::stderr().unwrap(); // Silence library noise (Whisper/ALSA)
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -141,11 +143,22 @@ async fn main() -> Result<(), anyhow::Error> {
                      }
                 }
 
+                // 1.5 Startle Reflex (Susto Acústico)
+                // Trigger based on GLOBAL current_spectrum (updated independently)
+                if current_spectrum.rms > 0.6 {
+                    chemistry.cortisol += 0.05; // Instant Stress Spike
+                    if current_spectrum.rms > 0.8 {
+                         chemistry.cortisol += 0.15; // PANIC
+                         let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "💥 LOUD NOISE DETECTED!".to_string()));
+                    }
+                }
+
                 // 2. Memorizar (Volatile RAM)
                 let _ = hippocampus.remember(&heard_text, "acoustic_input", current_entropy);
 
                 // 3. Recordar (RAG)
-                let mut current_insight = 0.0;
+                // 3. Recordar (RAG)
+
                 let context = if let Some((ctx, score)) = hippocampus.recall_relevant(&heard_text) {
                      let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🧠 RAG: Insight (Score: {:.2})", score)));
                      current_insight = score;

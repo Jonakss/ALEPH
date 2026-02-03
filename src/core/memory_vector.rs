@@ -61,7 +61,7 @@ impl VectorStore {
         };
         
         store.load_from_disk();
-        println!("🧠 Hippocampus Loaded: {} memories.", store.memories.len());
+        // println!("🧠 Hippocampus Loaded: {} memories.", store.memories.len());
         
         Ok(store)
     }

@@ -149,8 +149,19 @@ pub fn ui(
 
     // --- PANEL RIGHT: AVATAR ---
     let face = avatar::get_face(telemetry);
+    
+    // Glitch Effect (High Entropy)
+    let avatar_border_style = if telemetry.entropy > 0.8 {
+        Style::default().fg(Color::Red).add_modifier(Modifier::RAPID_BLINK)
+    } else {
+        Style::default()
+    };
+
     let avatar_widget = Paragraph::new(face.ascii)
-        .block(Block::default().title(" ALEPH ").borders(Borders::ALL))
+        .block(Block::default()
+            .title(" ALEPH ")
+            .borders(Borders::ALL)
+            .border_style(avatar_border_style))
         .style(Style::default().fg(face.color).add_modifier(Modifier::BOLD))
         .alignment(ratatui::layout::Alignment::Center); // Centrado
         
@@ -251,7 +262,7 @@ pub fn ui(
     f.render_widget(logs, mid_chunks[1]);
 
     // --- PANEL INFERIOR (BOTTOM): MONOLOGUE ---
-    let monologue_widget = monologue::render_monologue(&telemetry.thoughts);
+    let monologue_widget = monologue::render_monologue(&telemetry.thoughts, telemetry.insight_intensity);
     f.render_widget(monologue_widget, chunks[2]);
 
     // --- PANEL INFERIOR 2: MONOLOGUE ---

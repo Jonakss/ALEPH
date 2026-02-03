@@ -5,13 +5,10 @@ use ratatui::{
 };
 use crate::core::thought::{Thought, MindVoice};
 
-pub fn render_monologue<'a>(thoughts: &'a [Thought]) -> List<'a> {
+pub fn render_monologue<'a>(thoughts: &'a [Thought], insight_intensity: f32) -> List<'a> {
     let items: Vec<ListItem> = thoughts
         .iter()
-        .rev() // Show newest at top/bottom? Logs usually scroll down. 
-               // If we want "Feed", newest at bottom is standard, but in TUI restricted space, 
-               // keeping newest visible (scrolled to bottom) is key.
-               // For now, let's reverse to show history.
+        .rev()
         .take(12) 
         .rev()    
         .map(|t| {
@@ -19,20 +16,30 @@ pub fn render_monologue<'a>(thoughts: &'a [Thought]) -> List<'a> {
                 MindVoice::Sensory => ("[SENSORY]", Color::Cyan),
                 MindVoice::Cortex => ("[CORTEX] ", Color::Green),
                 MindVoice::Chem => ("[CHEM]   ", Color::Magenta),
-                MindVoice::System => ("[SYSTEM] ", Color::DarkGray), // or Yellow
+                MindVoice::System => ("[SYSTEM] ", Color::DarkGray),
             };
 
             let line = Line::from(vec![
                 Span::styled("> ", Style::default().fg(Color::DarkGray)),
                 Span::styled(prefix_text, Style::default().fg(color)),
                 Span::raw(" "),
-                Span::raw(&t.text),
+                Span::raw(&t.text), // Ensure this field exists
             ]);
             
             ListItem::new(line)
         })
         .collect();
+    
+    // Dynamic Border for Insight
+    let border_style = if insight_intensity > 0.05 {
+        Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)
+    } else {
+        Style::default()
+    };
 
     List::new(items)
-        .block(Block::default().title(" STREAM OF CONSCIOUSNESS ").borders(Borders::ALL))
+        .block(Block::default()
+            .title(" STREAM OF CONSCIOUSNESS ")
+            .borders(Borders::ALL)
+            .border_style(border_style))
 }
