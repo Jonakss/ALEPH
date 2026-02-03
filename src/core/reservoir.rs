@@ -99,7 +99,7 @@ impl FractalReservoir {
         new_activity.view_mut((0, 0), (old_size, 1)).copy_from(&self.activity_map);
         self.activity_map = new_activity;
 
-        println!("🌱 NEUROGENESIS: Expanded to {} neurons.", new_size);
+        // println!("🌱 NEUROGENESIS: Expanded to {} neurons.", new_size);
     }
     
     /// APOPTOSIS: Poda de neuronas inactivas

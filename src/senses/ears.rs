@@ -42,9 +42,10 @@ impl AudioListener {
         let silence_counter = silence_frames.clone();
         let muted_clone = is_muted.clone();
         let threshold_clone = attention_threshold.clone();
+        let thought_tx_err = thought_tx.clone();
 
         // 3. Audio Thread Closure
-        let err_fn = move |err| eprintln!("an error occurred on stream: {}", err);
+        // let err_fn = move |err| eprintln!("an error occurred on stream: {}", err);
         
         let stream = device.build_input_stream(
             &config.into(),
@@ -83,7 +84,7 @@ impl AudioListener {
                         *recording = false;
                         let _ = thought_tx.send(Thought::new(MindVoice::Sensory, "Silence detected. Processing clip...".to_string()));
                         
-                        // D. Process with Whisper
+                        // D. Process with Whisper (Silenced)
                         let samples = buffer.clone();
                         let ctx_mutex = state_clone.clone();
                         let ears_tx_thread = ears_tx.clone();
@@ -103,8 +104,14 @@ impl AudioListener {
                             let mut state = ctx_mutex.lock().unwrap();
                             let mut state_session = state.create_state().expect("failed to create state");
                             
+                            // SILENCE C++ OUTPUT
+                            let _print_gag = gag::Gag::stdout().ok();
+                            let _err_gag = gag::Gag::stderr().ok();
 
                             if let Ok(_) = state_session.full(params, &resampled[..]) {
+                                drop(_print_gag); // Restore stdout/stderr
+                                drop(_err_gag);
+
                                 let num_segments = state_session.full_n_segments().unwrap();
                                 let mut text = String::new();
                                 for i in 0..num_segments {
@@ -137,7 +144,7 @@ impl AudioListener {
                     }
                 }
             },
-            err_fn,
+            move |err| { let _ = thought_tx_err.send(Thought::new(MindVoice::System, format!("Audio Input Error: {}", err))); },
             None,
         )?;
         

@@ -28,6 +28,7 @@ dependencies = [
  "cpal",
  "crossterm",
  "device_query",
+ "gag",
  "hf-hub",
  "nalgebra",
  "rand 0.9.2",
@@ -1057,6 +1058,16 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
+]
+
+[[package]]
+name = "gag"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a713bee13966e9fbffdf7193af71d54a6b35a0bb34997cd6c9519ebeb5005972"
+dependencies = [
+ "filedescriptor",
+ "tempfile",
 ]
 
 [[package]]

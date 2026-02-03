@@ -77,8 +77,8 @@ pub fn run_tui(rx_telemetry: Receiver<Telemetry>) -> Result<(), anyhow::Error> {
     )?;
     terminal.show_cursor()?;
 
-    if let Err(err) = res {
-        println!("{:?}", err);
+    if let Err(_err) = res {
+        // println!("{:?}", err);
     }
 
     Ok(())

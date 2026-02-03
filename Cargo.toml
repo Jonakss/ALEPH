@@ -28,3 +28,4 @@ device_query = "2.1.0"                         # Tacto (Input Detection)
 whisper-rs = { version = "0.13.0" }            # STT Inference (Binding C++)
 # cpal already included above
 rubato = "0.14" # Audio Resampling (48k -> 16k)
+gag = "1.0.0"

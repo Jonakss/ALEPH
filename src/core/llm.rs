@@ -68,7 +68,7 @@ impl CognitiveCore {
         match self.generate(&prompt) {
             Ok(s) => s,
             Err(e) => {
-                println!("!! CORTEX FAULT: {}", e);
+                // println!("!! CORTEX FAULT: {}", e);
                 format!("[BRAIN_FADE]: ...silencio neuronal... ({})", e)
             }
         }
