@@ -167,6 +167,12 @@ impl VectorStore {
         Ok(())
     }
 
+    /// MECHANICAL HONESTY: Persistence - save identity to disk without consolidation
+    /// Called periodically so Aleph retains "past" across restarts
+    pub fn save(&self) -> Result<()> {
+        self.save_to_disk()
+    }
+
     fn load_from_disk(&mut self) {
         if let Ok(content) = fs::read_to_string(&self.file_path) {
             if let Ok(memories) = serde_json::from_str(&content) {

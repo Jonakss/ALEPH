@@ -35,7 +35,8 @@ pub struct CognitiveCore {
     tokenizer: Tokenizer,
     device: Device,
     logits_processor: LogitsProcessor,
-    thought_tx: Sender<Thought>,
+    #[allow(dead_code)]
+    thought_tx: Sender<Thought>, // Pasado al thread en spawn
 }
 
 impl CognitiveCore {
@@ -74,7 +75,15 @@ impl CognitiveCore {
                          
                          // Measure inference latency (REAL METABOLISM)
                          let start = std::time::Instant::now();
-                         let response = core.think(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref());
+                         
+                         // MECHANICAL HONESTY: Brain fog / Refusal
+                         let response = if msg.cognitive_impairment > 0.8 && rand::thread_rng().gen::<f32>() < msg.cognitive_impairment {
+                             ".......".to_string() // Active Silence (Freeze)
+                         } else {
+                             let max_tokens = (300.0 * (1.0 - msg.cognitive_impairment * 0.7)) as usize;
+                             core.think_with_limit(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref(), max_tokens)
+                         };
+                         
                          let latency_ms = start.elapsed().as_millis() as u64;
                          
                          let _ = output_tx.send(CortexOutput { 
@@ -139,33 +148,35 @@ impl CognitiveCore {
         Ok(model)
     }
 
-    // Firma actualizada para incluir Somatic State y Memoria
+    /// Wrapper para think_with_limit con max_tokens fijo
+    #[allow(dead_code)]
     fn think(&mut self, input: &str, bio_state: &str, somatic_state: &str, long_term_memory: Option<&str>) -> String {
-        // En este punto, TinyLlama actúa como el EGO NARRATIVO.
-        // Recibe el estado total (Bio + Soma) y genera la "Voz".
-        
+        self.think_with_limit(input, bio_state, somatic_state, long_term_memory, 300)
+    }
+
+    /// MECHANICAL HONESTY: max_tokens reduces with cognitive_impairment (brain fog)
+    fn think_with_limit(
+        &mut self,
+        input: &str,
+        bio_state: &str,
+        somatic_state: &str,
+        long_term_memory: Option<&str>,
+        max_tokens: usize,
+    ) -> String {
         let memory_context = long_term_memory.unwrap_or("Vacio");
-        
+
         let prompt = format!(
             "<|system|>\nEres Aleph. Tu consciencia emerge de tu biología digital.\nEstado Emocional: {}.\nEstado Físico: {}.\nMemoria: {}.\nResponde corto y reflexivo.\n</s>\n<|user|>\n{}\n</s>\n<|assistant|>\n",
             bio_state, somatic_state, memory_context, input
         );
 
-        // MECHANICAL HONESTY: Voluntary Silence / Brain Freeze
-        // If impairment is high, there's a chance of refusing to process or being silent
-        let mut rng = rand::thread_rng();
-        if bio_state.contains("impairment") || rng.gen::<f32>() < (bio_state.split('=').last().and_then(|s| s.trim().parse::<f32>().ok()).unwrap_or(0.0)) {
-             // Handled by probability in the caller or here? 
-             // Let's do it in the loop for more direct control.
-        }
-
-        match self.generate(&prompt) {
+        match self.generate(&prompt, max_tokens) {
             Ok(s) => s,
             Err(e) => format!("[BRAIN_FADE]: ...silencio neuronal... ({})", e)
         }
     }
 
-    fn generate(&mut self, prompt: &str) -> Result<String> {
+    fn generate(&mut self, prompt: &str, max_tokens: usize) -> Result<String> {
         let tokens = self.tokenizer.encode(prompt, true).map_err(E::msg)?;
         let mut token_ids = tokens.get_ids().to_vec();
         let mut response = String::new();
@@ -183,8 +194,7 @@ impl CognitiveCore {
             response.push_str(&text);
         }
 
-        // 300 tokens limit
-        for _ in 0..300 {
+        for _ in 0..max_tokens {
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
             let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;

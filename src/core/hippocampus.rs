@@ -55,4 +55,9 @@ impl Hippocampus {
     pub fn memory_count(&self) -> usize {
         self.store.memory_count()
     }
+
+    /// Persiste memoria actual a disco (sin consolidar). MECHANICAL HONESTY: identidad sobrevive al cierre.
+    pub fn save(&self) -> Result<()> {
+        self.store.save()
+    }
 }

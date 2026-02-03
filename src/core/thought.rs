@@ -12,7 +12,8 @@ pub enum MindVoice {
 pub struct Thought {
     pub voice: MindVoice,
     pub text: String,
-    pub timestamp: Instant,
+    #[allow(dead_code)]
+    pub timestamp: Instant, // Reservado para timeline / Variable Metabolism
 }
 
 impl Thought {

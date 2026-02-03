@@ -11,13 +11,15 @@ pub struct AudioSpectrum {
     pub bass: f32, // 20-250 Hz
     pub mids: f32, // 250-2000 Hz
     pub highs: f32, // 2000-20000 Hz
-    pub speaker_id: Option<String>, 
+    #[allow(dead_code)]
+    pub speaker_id: Option<String>, // Reservado para multi-speaker
 }
 
 pub struct AudioListener {
     _stream: cpal::Stream,
     is_muted: Arc<Mutex<bool>>,
-    attention_threshold: Arc<Mutex<f32>>,
+    #[allow(dead_code)]
+    attention_threshold: Arc<Mutex<f32>>, // Reservado para Predictive Coding
 }
 
 impl AudioListener {
@@ -74,7 +76,7 @@ impl AudioListener {
                   let _print_gag = gag::Gag::stdout().ok();
                   let _err_gag = gag::Gag::stderr().ok();
 
-                  let mut state = worker_state.lock().unwrap();
+                  let state = worker_state.lock().unwrap();
                   if let Ok(mut state_session) = state.create_state() {
                         if let Ok(_) = state_session.full(params, &resampled[..]) {
                             // Release gags

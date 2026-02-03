@@ -45,14 +45,15 @@ pub fn spawn_inner_voice(
             last_rumination = prompt.to_string();
             
             // Send to Cortex for internal processing
+            // Inner voice: no cognitive impairment (low-stress rumination)
             let input = CortexInput {
                 text: format!("[INNER VOICE] {}", prompt),
                 bio_state: "Reflexión interna silenciosa.".to_string(),
                 somatic_state: "Sistema estable.".to_string(),
                 long_term_memory: None,
-                // Inner voice happens during low-stress periods
                 cpu_load: 10.0,
                 ram_pressure: 0.3,
+                cognitive_impairment: 0.0,
             };
             
             let _ = tx_cortex.send(input);

@@ -102,8 +102,9 @@ impl FractalReservoir {
         // println!("🌱 NEUROGENESIS: Expanded to {} neurons.", new_size);
     }
     
-    /// APOPTOSIS: Poda de neuronas inactivas
+    /// APOPTOSIS: Poda de neuronas inactivas (reservado para Fase 5)
     /// Retorna cantidad de neuronas eliminadas
+    #[allow(dead_code)]
     pub fn prune_inactive_neurons(&mut self) -> usize {
         let current_size = self.current_size();
         if current_size <= 50 { return 0; } // Supervivencia mínima
@@ -148,6 +149,7 @@ impl FractalReservoir {
         pruned_count
     }
 
+    #[allow(dead_code)]
     pub fn get_state(&self) -> &DVector<f32> {
         &self.state
     }

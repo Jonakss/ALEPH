@@ -130,8 +130,10 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 | **2. Parametric Effects** | Hardware afecta hiperparámetros | CPU/RAM → Temperature/Top_p (líneas 56-72, `llm.rs`) |
 | **3. Structural Neuron Growth** | Memoria acumulada = densidad neuronal | `neuron_active_count = 100 + (hippocampus.memory_count() * 5)` (línea 309, `main.rs`) |
 | **4. Delta Sensitivity** | Reacción proporcional al cambio, no al valor absoluto | Chemistry reacciona a derivadas de entropía |
-| **5. Poke Reflex** | Audio peaks → Cortisol spikes | Startle reflex (líneas 198-210, `main.rs`) |
-| **6. Sleep as Maintenance** | Adenosina crítica fuerza consolidación de memoria | Forced sleep consolidation (líneas 150-161, `main.rs`) |
+| **5. Poke Reflex** | Audio peaks → Cortisol spikes | Startle reflex + tecla P (líneas 204-212, 403-405, `main.rs`) |
+| **6. Sleep as Maintenance** | Adenosina crítica fuerza consolidación de memoria | Forced sleep consolidation (líneas 166-178, `main.rs`) |
+| **7. Silencio Voluntario** | Fatiga cognitiva → respuestas cortas/silencio | `cognitive_impairment` → "......." o max_tokens reducido (`llm.rs`) |
+| **8. Persistencia** | Identidad sobrevive al cierre | `hippocampus.save()` cada 60s + `memories.json` |
 
 ---
 

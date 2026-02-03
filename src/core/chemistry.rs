@@ -91,8 +91,13 @@ impl Neurotransmitters {
     /// Check if body is at breaking point (forced sleep)
     pub fn is_body_failing(&self) -> bool {
         // At 95%+ adenosine, the body CANNOT continue
-        // This is not a choice - it's mechanical failure
         self.adenosine > 0.95
+    }
+
+    /// Check if recovered enough to wake (HYSTERESIS - evita bucle colapso/despertar)
+    /// Solo despertar cuando adenosina bajó significativamente, no en el borde del umbral
+    pub fn is_recovered_to_wake(&self) -> bool {
+        self.adenosine < 0.6
     }
     
     /// Get degradation factor for inference (brain fog)

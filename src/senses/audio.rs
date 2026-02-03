@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 /// Inicia la escucha del micrófono y envía el "Estímulo Neural" (0.0 - 1.0)
 /// a través del canal.
 /// Retorna el Stream de audio para que no se destruya (drop) mientras corre el programa.
+#[allow(dead_code)]
 pub fn start_listening(tx: Sender<f32>) -> Result<cpal::Stream, anyhow::Error> {
     let host = cpal::default_host();
     
@@ -30,6 +31,7 @@ pub fn start_listening(tx: Sender<f32>) -> Result<cpal::Stream, anyhow::Error> {
     Ok(stream)
 }
 
+#[allow(dead_code)]
 fn run<T>(
     device: &cpal::Device, 
     config: &cpal::StreamConfig, 
@@ -39,7 +41,7 @@ where
     T: cpal::Sample + cpal::SizedSample, 
     f32: From<T>,
 {
-    let err_fn = |err| {
+    let err_fn = |_err| {
         // eprintln!("❌ Error en el oído: {}", err);
     };
 
@@ -58,6 +60,7 @@ where
 
 /// Procesa el buffer de audio crudo y extrae la "Energía" (RMS)
 /// Aplicando una transferencia no-lineal (Bio-mimesis)
+#[allow(dead_code)]
 fn process_audio_data<T>(data: &[T], tx: &Arc<Mutex<Sender<f32>>>)
 where
     T: cpal::Sample,

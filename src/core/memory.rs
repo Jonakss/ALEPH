@@ -1,10 +1,13 @@
 use std::collections::VecDeque;
 
+/// Legacy: Audio memory buffer for future FFT trend analysis
+#[allow(dead_code)]
 pub struct AudioMemory {
     buffer: VecDeque<f32>,
     capacity: usize,
 }
 
+#[allow(dead_code)]
 impl AudioMemory {
     pub fn new(seconds: usize, sample_rate: usize) -> Self {
         // Asumiendo que guardamos RMS por tick (60Hz), no samples de audio raw (44100Hz)

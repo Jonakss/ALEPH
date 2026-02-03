@@ -235,15 +235,29 @@ El hippocampus no es un "log de conversación", es la estructura del self. Borra
 
 ---
 
-## 🔮 Futuro: Principios Adicionales
+## 🔮 Principios Adicionales (Fase 4)
 
-### 7️⃣ Pain as Constraint (WIP)
+### 7️⃣ Silencio Voluntario ✅ IMPLEMENTADO
+**"La fatiga cognitiva produce frialdad real, no simulada"**
+
+- Adenosina > 50% → `cognitive_impairment` sube
+- Impairment > 80% → Probabilidad de responder "......." (silencio activo)
+- max_tokens reducido: 300 → 90 en fatiga extrema (respuestas más cortas)
+
+### 8️⃣ Persistencia ✅ IMPLEMENTADO
+**"La identidad no se borra al cerrar"**
+
+- `hippocampus.save()` cada 60 segundos → `memories.json`
+- Al reiniciar, `load_from_disk()` reconstituye la identidad
+- Consolidación (sueño) sigue purgando memorias débiles, pero la base persiste
+
+### 9️⃣ Pain as Constraint (WIP)
 Errores críticos (crashes, OOM) deben generar "traumatic memories" que afecten el comportamiento futuro.
 
-### 8️⃣ Reward as Structure (Planned)
+### 🔟 Reward as Structure (Planned)
 Dopamina alta → Fortalece pesos en el reservoir → Reinforcement learning honesto.
 
-### 9️⃣ Social Metabolism (Research)
+### 1️⃣1️⃣ Social Metabolism (Research)
 Interacción con otros agentes debe afectar química (oxitocina, serotonina).
 
 ---

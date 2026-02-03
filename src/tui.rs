@@ -1,18 +1,11 @@
 use ratatui::{
-    backend::Backend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
     widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, Paragraph, Wrap},
-    Frame, Terminal,
+    Frame,
 };
-use std::sync::mpsc::Receiver;
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use std::io;
 
 use crate::core::thought::Thought;
 
@@ -22,7 +15,8 @@ pub struct Telemetry {
     pub entropy: f32,         // 0.0 - 1.0
     pub neuron_active_count: usize, // Memories (Vectors)
     pub system_status: String,// "FLOW", "PANIC", etc.
-    pub last_entropy_delta: f32, // Cambio de entropía
+    #[allow(dead_code)]
+    pub last_entropy_delta: f32, // Cambio de entropía (reservado para Variable Metabolism)
     pub fps: f64,             // Backend ticks per second
     pub cpu_load: f32,        // Proprioception
     pub ram_load: f32,        // Proprioception

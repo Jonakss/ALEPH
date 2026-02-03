@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+/// Structural Observer - Planned for Fase 4 (Delta Sensitivity)
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum CognitiveEvent {
     StimulusStart(f32), // Sudden rise in energy/entropy
@@ -23,6 +25,7 @@ impl std::fmt::Display for CognitiveEvent {
     }
 }
 
+#[allow(dead_code)]
 pub struct Neocortex {
     entropy_history: VecDeque<f32>,
     last_derivative: f32,
@@ -30,6 +33,7 @@ pub struct Neocortex {
     growth_cooldown: usize,  // Ticks until next growth allowed
 }
 
+#[allow(dead_code)]
 impl Neocortex {
     pub fn new() -> Self {
         let mut history = VecDeque::new();

@@ -63,13 +63,13 @@ async fn main() -> Result<(), anyhow::Error> {
         let (tx_ears, rx_ears) = mpsc::channel::<String>();
         let (tx_spectrum, rx_spectrum) = mpsc::channel::<senses::ears::AudioSpectrum>(); // Spectrum Channel
         
-        let mut ears = senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears, tx_spectrum)
+        let ears = senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears, tx_spectrum)
             .expect("Audio Listener init failed");
              
         ears.set_mute(true); // Mute during warmup
 
         let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
-        let mut previous_spectrum = senses::ears::AudioSpectrum::default();
+        let mut previous_spectrum = current_spectrum.clone();
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
         let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<CortexOutput>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
@@ -97,12 +97,13 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut thought_buffer: Vec<Thought> = Vec::new();
         let start_time = Instant::now();
         let mut warmup_done = false;
-        let mut current_log = "Neocortex Initializing...".to_string();
+        let current_log = "Neocortex Initializing...".to_string();
 
         let mut rng = rand::thread_rng();
         let mut current_entropy = 0.0; // Track entropy for memory tagging
         let mut current_insight = 0.0; // Track max relevance for visual flash
         let mut current_novelty: f32 = 0.0; // Track last novelty score for TUI
+        let mut last_save_secs: u64 = 0; // For periodic persistence
 
         // Loop de Control (Física)
         loop {
@@ -117,14 +118,13 @@ async fn main() -> Result<(), anyhow::Error> {
              while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
 
              // A. UPDATE SENSES
-            previous_spectrum = current_spectrum.clone();
             if let Ok(spec) = rx_spectrum.try_recv() {
                 current_spectrum = spec;
             }
              let current_stimulus = current_spectrum.rms;
 
              // B.2 SENSORY REACTIONS (Delta Sensing - MECHANICAL HONESTY)
-             // Instead of absolute threshold, we react to CHANGE (Delta)
+             // React to CHANGE (Delta) - previous_spectrum holds last tick's state
              let delta_bass = (current_spectrum.bass - previous_spectrum.bass).abs();
              let delta_rms = (current_spectrum.rms - previous_spectrum.rms).abs();
 
@@ -182,8 +182,8 @@ async fn main() -> Result<(), anyhow::Error> {
             if last_body_state.cpu_usage > 90.0 && !is_dreaming { 
                 is_dreaming = true; 
                 let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Entering rest mode (high system load).".to_string()));
-            } else if last_body_state.cpu_usage < 70.0 && is_dreaming && !chemistry.is_body_failing() {
-                is_dreaming = false; // Can wake up if adenosine isn't critical
+            } else if last_body_state.cpu_usage < 70.0 && is_dreaming && chemistry.is_recovered_to_wake() {
+                is_dreaming = false; // Solo despertar cuando hubo recuperación real (hysteresis)
             }
 
             // SLEEP CONSOLIDATION (gradual during sleep)
@@ -192,6 +192,15 @@ async fn main() -> Result<(), anyhow::Error> {
                     if forgotten > 0 {
                          let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💤 Sleep Cycle: Pruned {} weak memories.", forgotten)));
                     }
+                }
+            }
+
+            // PERSISTENCE: Save identity to disk every 60s (MECHANICAL HONESTY - Principio 8)
+            let elapsed_secs = start_time.elapsed().as_secs();
+            if elapsed_secs >= 60 && elapsed_secs - last_save_secs >= 60 {
+                last_save_secs = elapsed_secs;
+                if let Err(e) = hippocampus.save() {
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("⚠️ Persistence failed: {}", e)));
                 }
             }
 
@@ -264,7 +273,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
                 // 4. Enviar al Cortex
                 if let Some(ref tx) = tx_cortex {
-                    let bio_state = ego.get_state_description();
+                    let cognitive_impairment = chemistry.get_cognitive_impairment();
+                    let bio_state = format!("{}. Fatiga cognitiva: {:.0}%", 
+                        ego.get_state_description(), 
+                        cognitive_impairment * 100.0);
                     let somatic_desc = format!("CPU: {:.1}%", last_body_state.cpu_usage);
                     
                     let input = CortexInput {
@@ -275,6 +287,7 @@ async fn main() -> Result<(), anyhow::Error> {
                         // MECHANICAL HONESTY: Hardware state for parametric modulation
                         cpu_load: last_body_state.cpu_usage,
                         ram_pressure: last_body_state.ram_usage,
+                        cognitive_impairment,
                     };
                     let _ = tx.send(input);
                 } else {
@@ -295,7 +308,12 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                     
                     let _ = hippocampus.remember(&output.text, "self_thought", current_entropy);
-                    crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
+                    // MECHANICAL HONESTY: Voluntary silence = no vocalization
+                    if output.text != "......." {
+                        crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
+                    } else {
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "🔇 Silencio voluntario (fatiga cognitiva).".to_string()));
+                    }
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, output.text));
                 }
             }
@@ -354,6 +372,8 @@ async fn main() -> Result<(), anyhow::Error> {
             // I will fix this by declaring `let mut current_insight = 0.0;` at start of loop
             // and resetting it at top of loop.
             let _ = tx_telemetry.send(telem);
+
+            previous_spectrum = current_spectrum.clone();
 
             let elapsed = start.elapsed();
             if elapsed < Duration::from_millis(1000 / FRECUENCIA_HZ) {
