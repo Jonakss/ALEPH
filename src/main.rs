@@ -706,7 +706,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
         
         // Wait for response
         if let Some(ref rx) = rx_cortex_out {
-            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+            match rx.recv_timeout(std::time::Duration::from_secs(60)) {
                 Ok(output) => {
                     println!("\n🧠 ALEPH: {}\n", output.text);
                 },
