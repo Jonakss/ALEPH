@@ -34,6 +34,21 @@ const SPARSITY: f32 = 0.2;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // 0. TUI SETUP
+    // CRITICAL DEBUG: Catch panics to file because TUI hides stderr
+    std::panic::set_hook(Box::new(|info| {
+        let payload = info.payload();
+        let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = payload.downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "Unknown panic"
+        };
+        let location = info.location().unwrap_or(std::panic::Location::caller());
+        let log = format!("CRASH REPORT:\nError: {}\nLocation: {}\n", msg, location);
+        let _ = std::fs::write("crash.log", log);
+    }));
+
     // let _stderr_gag = Gag::stderr().unwrap(); // COMMENTED OUT FOR DEBUGGING CRASHES
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -233,8 +248,43 @@ async fn main() -> Result<(), anyhow::Error> {
             }
 
             // D. HANDLE HEARING (Async Memory Trigger)
+            // D. HANDLE HEARING (Async Memory Trigger)
             while let Ok(heard_text) = rx_ears.try_recv() {
-                if is_dreaming { continue; }
+                // MECHANICAL HONESTY: Sensory Gating
+                // Attention is not binary. It's a probability function of energy (adenosine) and interest (dopamine).
+                
+                // 1. Calculate Attention Score (0.0 to 1.0)
+                // Base 0.5. Dopamine boosts to 1.0. Adenosine penalizes to 0.0.
+                let attention_score = (0.5 + (chemistry.dopamine * 0.5) - (chemistry.adenosine * 0.8)).clamp(0.0, 1.0);
+                
+                // 2. Determine Fate of Input
+                // MECHANICAL HONESTY: Entropic Gating
+                // If internal chaos (entropy) exceeds our ability to focus (attention_score), we fail to process.
+                // This makes "ignoring" a physical consequence of the neural state.
+                
+                if is_dreaming {
+                    // In sleep, external input is 95% noise, 5% incorporation
+                     if rng.gen::<f32>() < 0.05 {
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("🌙 Dream Incorporation: '{}'", heard_text)));
+                         // Weak memory trace
+                        let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+                             text: heard_text, 
+                             entropy: current_entropy * 0.5 
+                        });
+                     }
+                    continue; 
+                }
+
+                // If Entropy (Noise) > Attention (Signal Strength), we lose the packet.
+                // We add a small baseline chance (0.1) so attention isn't perfect even at low entropy.
+                if current_entropy > (attention_score + 0.1) {
+                    // IGNORED (Heard but not processed)
+                    // Visual feedback of "zoning out"
+                     if rng.gen_bool(0.2) { // Don't spam refusal
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("🌫️ Zoned out (Entropy {:.2} > Attn {:.2}). Missed: '...{}...'", current_entropy, attention_score, &heard_text.chars().take(5).collect::<String>())));
+                     }
+                    continue;
+                }
                 
                 // FEEDBACK: Let user know we heard them
                 let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, format!("👂 Hearing: '{}'", heard_text)));
@@ -359,7 +409,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // F. PHYSICS
             let excitation = if is_dreaming { 0.8 } else { 0.2 };
-            let input_noise: Vec<f32> = (0..NEURONAS)
+            // CRITICAL FIX: Use current_size() to match growing reservoir
+            let input_noise: Vec<f32> = (0..ego.current_size())
                 .map(|i| {
                     let mut noise = (rng.gen::<f32>() - 0.5) * excitation;
                     // Inject Audio to first 30 neurons
@@ -387,15 +438,20 @@ async fn main() -> Result<(), anyhow::Error> {
             chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, shock_value, ego.current_size(), delta_time);
 
             // F.2 METABOLIC NEUROGENESIS (Spontaneous Growth)
-            // If the system is excited (High Dopamine) and active (High Entropy), it grows naturally.
-            if chemistry.dopamine > 0.7 && entropy > 0.5 {
-                 growth_counter += 1;
-                 if growth_counter >= 10 && ego.current_size() < 1500 { // Slower than memory growth
+            // NON-HARDCODED: Probability of growth is a function of the sys state.
+            // P(Growth) = (Dopamine * Entropy) / 100.0
+            // If excited and chaotic, brain expands.
+            let growth_prob = (chemistry.dopamine * entropy * 0.1).clamp(0.0, 1.0);
+            
+            if rng.gen_bool(growth_prob as f64) && ego.current_size() < 1500 {
+                 growth_counter += 1; // Accumulate biological potential
+                 
+                 // Growth requires a threshold of accumulation (mitosis takes time)
+                 if growth_counter >= 5 {
                      growth_counter = 0;
-                     ego.neurogenesis(1); // Slow trickle growth
-                     if rng.gen_bool(0.1) { // Don't spam logs
-                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
-                            format!("🌱 Metabolic Growth: +1 neuron (Excitement)")));
+                     ego.neurogenesis(1); 
+                     if rng.gen_bool(0.1) { 
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "🌱 Metabolic Growth: +1 neuron".to_string()));
                      }
                  }
             }

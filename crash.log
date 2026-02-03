@@ -1,0 +1,5 @@
+CRASH REPORT:
+Error: assertion `left == right` failed: Matrix addition/subtraction dimensions mismatch.
+  left: (501, 1)
+ right: (500, 1)
+Location: /home/jonathan.correa/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nalgebra-0.32.6/src/base/ops.rs:360:1
