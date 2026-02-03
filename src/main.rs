@@ -741,10 +741,10 @@ async fn run_headless() -> Result<(), anyhow::Error> {
             
             let _ = tx.send(CortexInput {
                 text: input.clone(),
-                somatic_state: String::new(),
-                long_term_memory: None,
+                _somatic_state: String::new(),
+                _long_term_memory: None,
                 bio_state: bio_desc,
-                cognitive_impairment: 0.0,
+                _cognitive_impairment: 0.0,
                 _cpu_load: 0.0,
                 _ram_pressure: 0.0,
                 entropy: 0.5,

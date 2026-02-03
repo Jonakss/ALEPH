@@ -14,11 +14,11 @@ const TOKENIZER_FILE: &str = "tokenizer_tinyllama.json";
 pub struct CortexInput {
     pub text: String,
     pub bio_state: String,
-    pub somatic_state: String,
-    pub long_term_memory: Option<String>,
+    pub _somatic_state: String,
+    pub _long_term_memory: Option<String>,
     pub _cpu_load: f32,
     pub _ram_pressure: f32,
-    pub cognitive_impairment: f32,
+    pub _cognitive_impairment: f32,
     pub entropy: f32,
     pub adenosine: f32,
 }
