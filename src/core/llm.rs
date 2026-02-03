@@ -234,8 +234,8 @@ impl CognitiveCore {
         let mut current_word = String::new();
 
         for i in 0..max_tokens {
-            if i % 10 == 0 { 
-                let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[INFO] Generating token {}/{}...", i, max_tokens)));
+            if i % 50 == 0 && i > 0 { 
+                let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[LLM: {}/{} tokens]", i, max_tokens)));
             }
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
@@ -254,13 +254,13 @@ impl CognitiveCore {
 
             // STREAMING TO VOICE (Flag set by think_stream based on input prefix)
             // Use SENTENCE-LEVEL buffering to prevent choppy audio
-            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], true) {
+            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], false) {
                  current_word.push_str(&new_fragment);
                  
                  // PHRASE boundary detection - buffer until punctuation or max length
                  let has_punctuation = new_fragment.contains('.') || new_fragment.contains('!') || 
                                        new_fragment.contains('?') || new_fragment.contains('\n');
-                 let is_too_long = current_word.len() > 20; // More frequent updates
+                 let is_too_long = current_word.len() > 10; // Even faster
                  
                  if has_punctuation || is_too_long {
                      let voice = if self.is_internal_monologue { MindVoice::Cortex } else { MindVoice::Vocal };

@@ -10,6 +10,7 @@ use crate::core::reservoir::FractalReservoir;
 use crate::core::thought::{MindVoice, Thought};
 use nalgebra::DVector;
 use std::{thread, time::{Duration, Instant}};
+use std::sync::{Arc, Mutex};
 use anyhow::Result;
 
 enum BackendCommand {
@@ -658,7 +659,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
     
     // Initialize Core Systems
     let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
-    let chemistry = core::chemistry::Neurotransmitters::new();
+    let chemistry = Arc::new(Mutex::new(core::chemistry::Neurotransmitters::new()));
     
     // Background thought printer
     let printer_rx = rx_thoughts;
@@ -694,17 +695,19 @@ async fn run_headless() -> Result<(), anyhow::Error> {
 
     // System Ticking Thread (Bio-logic)
     let ticker_thoughts = tx_thoughts.clone();
+    let ticker_chem = chemistry.clone();
     thread::spawn(move || {
-        let mut chem = core::chemistry::Neurotransmitters::new();
         loop {
-            // Very slow metabolic tick for headless
-            chem.tick(0.1, 5.0, false, 0.0, 100, 1.0);
-            
-            if rand::random::<f32>() < 0.20 {
-                let _ = ticker_thoughts.send(Thought::new(MindVoice::Chem, 
-                    format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)));
+            {
+                let mut chem = ticker_chem.lock().unwrap();
+                // Very slow metabolic tick for headless
+                chem.tick(0.1, 5.0, false, 0.0, 100, 1.0);
+                
+                if rand::random::<f32>() < 0.20 {
+                    let _ = ticker_thoughts.send(Thought::new(MindVoice::Chem, 
+                        format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)));
+                }
             }
-            
             thread::sleep(Duration::from_millis(1000));
         }
     });
@@ -730,7 +733,12 @@ async fn run_headless() -> Result<(), anyhow::Error> {
         
         // Send to LLM
         if let Some(ref tx) = tx_cortex {
-            let bio_desc = format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chemistry.adenosine, chemistry.dopamine, chemistry.cortisol);
+            let bio_desc = {
+                let chem = chemistry.lock().unwrap();
+                format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)
+            };
+            let aden = chemistry.lock().unwrap().adenosine;
+            
             let _ = tx.send(CortexInput {
                 text: input.clone(),
                 somatic_state: String::new(),
@@ -740,7 +748,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 _cpu_load: 0.0,
                 _ram_pressure: 0.0,
                 entropy: 0.5,
-                adenosine: chemistry.adenosine,
+                adenosine: aden,
             });
             
             // Send to memory too
