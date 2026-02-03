@@ -33,6 +33,15 @@ const SPARSITY: f32 = 0.2;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // Parse command line args
+    let args: Vec<String> = std::env::args().collect();
+    let headless = args.iter().any(|a| a == "--headless" || a == "-h");
+    
+    if headless {
+        println!("🧠 ALEPH running in HEADLESS mode (no TUI, no audio)");
+        return run_headless().await;
+    }
+    
     // 0. TUI SETUP
     // CRITICAL DEBUG: Catch panics to file because TUI hides stderr
     std::panic::set_hook(Box::new(|info| {
@@ -634,5 +643,93 @@ async fn main() -> Result<(), anyhow::Error> {
     )?;
     terminal.show_cursor()?;
 
+    Ok(())
+}
+
+/// Headless mode for Lightning AI / servers without display or microphone
+async fn run_headless() -> Result<(), anyhow::Error> {
+    use std::io::{self, BufRead, Write};
+    
+    println!("===========================================");
+    println!("  ALEPH HEADLESS MODE");
+    println!("  Type messages and press Enter to chat.");
+    println!("  Type 'quit' to exit.");
+    println!("===========================================\n");
+    
+    // Initialize LLM only
+    let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
+    
+    let (tx_cortex, rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
+        Ok((tx, rx)) => {
+            println!("✅ Cortex (LLM) ONLINE");
+            (Some(tx), Some(rx))
+        },
+        Err(e) => {
+            eprintln!("❌ Cortex failed to start: {}", e);
+            return Err(e);
+        }
+    };
+    
+    // Simple REPL loop
+    let stdin = io::stdin();
+    print!("\n> ");
+    io::stdout().flush()?;
+    
+    for line in stdin.lock().lines() {
+        let input = line?;
+        
+        if input.trim().to_lowercase() == "quit" {
+            println!("👋 Goodbye.");
+            break;
+        }
+        
+        if input.trim().is_empty() {
+            print!("> ");
+            io::stdout().flush()?;
+            continue;
+        }
+        
+        // Send to LLM
+        if let Some(ref tx) = tx_cortex {
+            let _ = tx.send(CortexInput {
+                text: input.clone(),
+                somatic_state: String::new(),
+                long_term_memory: None,
+                bio_state: "Headless mode".to_string(),
+                cognitive_impairment: 0.0,
+                _cpu_load: 0.0,
+                _ram_pressure: 0.0,
+                entropy: 0.5,
+                adenosine: 0.0,
+            });
+        }
+        
+        // Wait for response
+        if let Some(ref rx) = rx_cortex_out {
+            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                Ok(output) => {
+                    println!("\n🧠 ALEPH: {}\n", output.text);
+                },
+                Err(_) => {
+                    println!("\n⏱️  (timeout waiting for response)\n");
+                }
+            }
+        }
+        
+        // Also print any thoughts
+        while let Ok(thought) = rx_thoughts.try_recv() {
+            println!("[{}] {}", match thought.voice {
+                MindVoice::Cortex => "CORTEX",
+                MindVoice::Vocal => "VOCAL",
+                MindVoice::System => "SYS",
+                MindVoice::Chem => "BIO",
+                MindVoice::Sensory => "EAR",
+            }, thought.text);
+        }
+        
+        print!("> ");
+        io::stdout().flush()?;
+    }
+    
     Ok(())
 }
