@@ -50,6 +50,9 @@ pub fn spawn_inner_voice(
                 bio_state: "Reflexión interna silenciosa.".to_string(),
                 somatic_state: "Sistema estable.".to_string(),
                 long_term_memory: None,
+                // Inner voice happens during low-stress periods
+                cpu_load: 10.0,
+                ram_pressure: 0.3,
             };
             
             let _ = tx_cortex.send(input);

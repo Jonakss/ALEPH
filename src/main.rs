@@ -5,7 +5,7 @@ mod senses;
 mod tui;
 mod actuators;
 
-use crate::core::llm::{CognitiveCore, CortexInput};
+use crate::core::llm::{CognitiveCore, CortexInput, CortexOutput};
 use crate::core::reservoir::FractalReservoir;
 use crate::core::thought::{MindVoice, Thought};
 use nalgebra::DVector;
@@ -65,7 +65,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
-        let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<String>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
+        let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<CortexOutput>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
             Ok((tx, rx)) => (Some(tx), Some(rx)),
             Err(e) => {
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("Neocortex DEAD: {}", e)));
@@ -125,12 +125,12 @@ async fn main() -> Result<(), anyhow::Error> {
                  }
              }
              
-             // B.3 ENTROPY REACTIONS
-             if rng.gen_bool(0.02) { // ~2% chance
-                 if current_entropy > 0.7 {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("⚡ High entropy ({:.2}) - Pattern disruption!", current_entropy)));
-                 } else if current_entropy < 0.1 {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Low activity... entering stasis mode.".to_string()));
+             // B.3 ENTROPY REACTIONS (Rare, only extreme states)
+             if rng.gen_bool(0.003) { // 0.3% = ~every 5 seconds
+                 if current_entropy > 0.85 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("⚡ CHAOS ({:.0}%) - Systemic overload!", current_entropy * 100.0)));
+                 } else if current_entropy < 0.05 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Near stasis... consciousness fading.".to_string()));
                  }
              }
 
@@ -141,10 +141,35 @@ async fn main() -> Result<(), anyhow::Error> {
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Senses OPEN.".to_string()));
             }
 
-            if last_body_state.cpu_usage > 90.0 { is_dreaming = true; } else { is_dreaming = false; }
+            // MECHANICAL ADENOSINE: Memory pressure creates fatigue floor
+            let max_volatile_memories = 500; // Before consolidation becomes critical
+            let memory_pressure = hippocampus.memory_count() as f32 / max_volatile_memories as f32;
+            chemistry.set_memory_pressure(memory_pressure);
+            
+            // FORCED SLEEP: Body can only push so far
+            if chemistry.is_body_failing() && !is_dreaming {
+                is_dreaming = true;
+                let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                    "💀 ADENOSINE CRITICAL - Consciousness collapse. Forced consolidation.".to_string()));
+                    
+                // Emergency consolidation
+                if let Ok(forgotten) = hippocampus.consolidate_sleep() {
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                        format!("💤 Emergency purge: {} memories consolidated.", forgotten)));
+                }
+                ego.reset_activity_map();
+            }
+            
+            // OPTIONAL SLEEP: High CPU triggers rest mode (but not forced)
+            if last_body_state.cpu_usage > 90.0 && !is_dreaming { 
+                is_dreaming = true; 
+                let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Entering rest mode (high system load).".to_string()));
+            } else if last_body_state.cpu_usage < 70.0 && is_dreaming && !chemistry.is_body_failing() {
+                is_dreaming = false; // Can wake up if adenosine isn't critical
+            }
 
-            // SLEEP CONSOLIDATION (Hippocampus 2.0)
-            if is_dreaming && rng.gen_bool(0.005) { // Occasional consolidation during sleep
+            // SLEEP CONSOLIDATION (gradual during sleep)
+            if is_dreaming && rng.gen_bool(0.01) {
                 if let Ok(forgotten) = hippocampus.consolidate_sleep() {
                     if forgotten > 0 {
                          let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💤 Sleep Cycle: Pruned {} weak memories.", forgotten)));
@@ -184,8 +209,18 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 }
 
-                // 2. Memorizar (Volatile RAM)
+                // 2. Memorizar (Volatile RAM) + NEUROGENESIS
                 let _ = hippocampus.remember(&heard_text, "acoustic_input", current_entropy);
+                
+                // MECHANICAL HONESTY: New memory = new neural connections
+                // Every 10 memories, grow 1-3 neurons (if under capacity)
+                let memory_count = hippocampus.memory_count();
+                if memory_count % 10 == 0 && ego.current_size() < 300 {
+                    let growth = (current_novelty * 3.0).ceil() as usize; // Novel = more growth
+                    ego.neurogenesis(growth.clamp(1, 3));
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                        format!("🌱 Neurogenesis: +{} neurons (Total: {})", growth, ego.current_size())));
+                }
 
                 // 3. Recordar (RAG)
                 // 3. Recordar (RAG)
@@ -208,6 +243,9 @@ async fn main() -> Result<(), anyhow::Error> {
                         bio_state,
                         somatic_state: somatic_desc,
                         long_term_memory: context,
+                        // MECHANICAL HONESTY: Hardware state for parametric modulation
+                        cpu_load: last_body_state.cpu_usage,
+                        ram_pressure: last_body_state.ram_usage,
                     };
                     let _ = tx.send(input);
                 } else {
@@ -215,13 +253,21 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
             }
 
-            // E. HANDLE CORTEX OUTPUT
+            // E. HANDLE CORTEX OUTPUT (With Metabolic Latency)
             if let Some(ref rx) = rx_cortex_out {
-                while let Ok(response) = rx.try_recv() {
-                    let _ = hippocampus.remember(&response, "self_thought", current_entropy);
-                    crate::actuators::voice::speak(response.clone(), tx_thoughts.clone());
-                    // Corrected MindVoice
-                    let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, response));
+                while let Ok(output) = rx.try_recv() {
+                    // Metabolismo Real: Latencia de inferencia afecta al sistema
+                    let latency_sec = output.inference_latency_ms as f32 / 1000.0;
+                    if latency_sec > 2.0 {
+                        // Slow inference = mental fatigue (ADENOSINE)
+                        chemistry.adenosine += latency_sec * 0.05;
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                            format!("🧠 Esfuerzo cognitivo: {:.1}s de latencia", latency_sec)));
+                    }
+                    
+                    let _ = hippocampus.remember(&output.text, "self_thought", current_entropy);
+                    crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, output.text));
                 }
             }
 

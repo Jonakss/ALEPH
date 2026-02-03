@@ -142,12 +142,19 @@ impl AudioListener {
                             .sum::<f32>() / (end - start).max(1) as f32
                     };
 
-                    // Normalize by FFT length and apply sensible scaling
-                    let fft_norm = 1024.0; // FFT length normalizer
+                    // MECHANICAL HONESTY: No normalization tricks
+                    // Raw FFT magnitude, minimal scaling
+                    // If audio is quiet, it IS quiet
+                    let raw_bass = get_magnitude(&spectrum_buffer, 1, 6);
+                    let raw_mids = get_magnitude(&spectrum_buffer, 6, 46);
+                    let raw_highs = get_magnitude(&spectrum_buffer, 46, 200);
+                    
+                    // Only divide by FFT length, no "boost" or "sensitivity"
+                    let scale = fft_len as f32;
                     (
-                        (get_magnitude(&spectrum_buffer, 1, 6) / fft_norm).clamp(0.0, 1.0),
-                        (get_magnitude(&spectrum_buffer, 6, 46) / fft_norm).clamp(0.0, 1.0),
-                        (get_magnitude(&spectrum_buffer, 46, 200) / fft_norm).clamp(0.0, 1.0)
+                        (raw_bass / scale).clamp(0.0, 1.0),
+                        (raw_mids / scale).clamp(0.0, 1.0),
+                        (raw_highs / scale).clamp(0.0, 1.0)
                     )
                 } else {
                     (0.0, 0.0, 0.0) // Skip FFT this frame if mutex busy

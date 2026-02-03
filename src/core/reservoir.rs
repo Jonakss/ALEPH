@@ -174,4 +174,9 @@ impl FractalReservoir {
             format!("CAOS. Ruido excesivo (Entropía: {:.2}). Pánico.", variance)
         }
     }
+    
+    /// Reset activity map during sleep (MECHANICAL HONESTY: Clear neural cache)
+    pub fn reset_activity_map(&mut self) {
+        self.activity_map = DVector::zeros(self.state.len());
+    }
 }

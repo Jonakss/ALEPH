@@ -17,6 +17,15 @@ pub struct CortexInput {
     pub bio_state: String,
     pub somatic_state: String, // Estado del Hardware (Cuerpo)
     pub long_term_memory: Option<String>,
+    // Hardware State for Parametric Modulation
+    pub cpu_load: f32,    // 0.0 - 100.0
+    pub ram_pressure: f32, // 0.0 - 1.0
+}
+
+// Response with metabolic data
+pub struct CortexOutput {
+    pub text: String,
+    pub inference_latency_ms: u64, // Real metabolic cost
 }
 
 // El Cerebro en sí (Internal)
@@ -30,9 +39,9 @@ pub struct CognitiveCore {
 
 impl CognitiveCore {
     // Spawnea el thread del Cortex y retorna los canales de comunicación
-    pub fn spawn(thought_tx: Sender<Thought>) -> Result<(Sender<CortexInput>, Receiver<String>)> {
+    pub fn spawn(thought_tx: Sender<Thought>) -> Result<(Sender<CortexInput>, Receiver<CortexOutput>)> {
         let (input_tx, input_rx) = channel::<CortexInput>();
-        let (output_tx, output_rx) = channel::<String>();
+        let (output_tx, output_rx) = channel::<CortexOutput>();
 
         let thread_thought_tx = thought_tx.clone();
 
@@ -44,10 +53,33 @@ impl CognitiveCore {
                     
                     // 2. Event Loop (Consciencia Hub)
                     while let Ok(msg) = input_rx.recv() {
-                         let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "Cortex: Processing...".to_string()));
-                         // El pensamiento ahora integra Soma + Bio + Memoria
+                         // MECHANICAL HONESTY: Hardware modulates hyperparameters
+                         let temp_modifier: f64 = if msg.cpu_load > 80.0 { 0.3 } else { 0.0 }; // High CPU = irritable
+                         let top_p_modifier: f64 = if msg.ram_pressure > 0.9 { -0.2 } else { 0.0 }; // High RAM = foggy
+                         
+                         let effective_temp: f64 = (0.7_f64 + temp_modifier).clamp(0.1, 1.5);
+                         let effective_top_p: f64 = (0.9_f64 + top_p_modifier).clamp(0.5, 1.0);
+                         
+                         core.logits_processor = LogitsProcessor::new(
+                             rand::thread_rng().gen(),
+                             Some(effective_temp),
+                             Some(effective_top_p)
+                         );
+                         
+                         if temp_modifier > 0.0 || top_p_modifier < 0.0 {
+                             let _ = thread_thought_tx.send(Thought::new(MindVoice::Chem, 
+                                 format!("🧪 Parametric shift: T={:.1} P={:.1}", effective_temp, effective_top_p)));
+                         }
+                         
+                         // Measure inference latency (REAL METABOLISM)
+                         let start = std::time::Instant::now();
                          let response = core.think(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref());
-                         let _ = output_tx.send(response);
+                         let latency_ms = start.elapsed().as_millis() as u64;
+                         
+                         let _ = output_tx.send(CortexOutput { 
+                             text: response, 
+                             inference_latency_ms: latency_ms 
+                         });
                     }
                 }
                 Err(e) => {
