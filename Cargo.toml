@@ -1,0 +1,30 @@
+[package]
+name = "aleph_zero"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# --- MATEMÁTICA DEL CAOS (SISTEMA 1) ---
+nalgebra = "0.32"  # Álgebra lineal optimizada
+rand = "0.9"       # Generador de caos (Latest)
+rand_distr = "0.5" # Distribuciones gaussianas (Latest)
+
+# --- IA GENERATIVA (SISTEMA 2) ---
+# Si usas NVIDIA, deja "cuda". Si es Mac, cambia a "metal". Si es CPU, quítalo.
+candle-core = { version = "0.9.2", features = ["cuda"] }
+candle-nn = { version = "0.9.2", features = ["cuda"] }
+candle-transformers = { version = "0.9.2", features = ["cuda"] }
+tokenizers = "0.19.1"
+hf-hub = "0.3"                                                   # Descarga automática de modelos
+
+# --- SISTEMA NERVIOSO ---
+tokio = { version = "1", features = ["full"] } # Asincronía
+anyhow = "1.0"                                 # Manejo de errores
+cpal = "0.15"                                  # Captura de audio multiplataforma
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+sysinfo = "0.30"                               # Propriocepción (Monitor de CPU/RAM)
+device_query = "2.1.0"                         # Tacto (Input Detection)
+whisper-rs = { version = "0.13.0" }            # STT Inference (Binding C++)
+# cpal already included above
+rubato = "0.14" # Audio Resampling (48k -> 16k)
