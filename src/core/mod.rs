@@ -7,3 +7,4 @@ pub mod neocortex;
 pub mod reservoir;
 pub mod thought;
 pub mod llm;
+pub mod memory_vector;

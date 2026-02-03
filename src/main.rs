@@ -1,16 +1,25 @@
+#![allow(deprecated)]
+
 mod core;
 mod senses;
 mod tui;
 mod actuators;
 
-use crate::actuators::voice;
-use crate::core::llm::CognitiveCore;
+use crate::core::llm::{CognitiveCore, CortexInput};
 use crate::core::reservoir::FractalReservoir;
 use crate::core::thought::{MindVoice, Thought};
 use nalgebra::DVector;
 use std::{thread, time::{Duration, Instant}};
 use std::sync::mpsc;
 use rand::prelude::*;
+use std::io;
+
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 // CONFIGURACIÓN DE VIDA
 const NEURONAS: usize = 100;
@@ -19,6 +28,13 @@ const FRECUENCIA_HZ: u64 = 60;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // 0. TUI SETUP
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
     // Canal Telemetria: Backend -> Frontend (TUI)
     let (tx_telemetry, rx_telemetry) = mpsc::channel::<tui::Telemetry>();
 
@@ -29,283 +45,233 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // 2. Componentes Biológicos
         let mut chemistry = core::chemistry::Neurotransmitters::new();
-        let mut hippocampus = core::hippocampus::Hippocampus::new();
+        // Base de Datos Vectorial (Hippocampus)
+        let mut hippocampus = core::hippocampus::Hippocampus::new()
+            .expect("HIPPOCAMPUS INIT FAILED: Check .onnx model");
 
         // 3. Sistema Sensorial (The Senses)
-        // A. Oídos (Stt) & Pensamientos (Monólogo)
         let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
         let (tx_ears, rx_ears) = mpsc::channel::<String>();
+        let (tx_rms, rx_rms) = mpsc::channel::<f32>(); // Canal de Audio Raw
         
-        // Iniciar Oído (con manejo de error soft)
-        let mut ears: Option<senses::ears::AudioListener> = match senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears) {
-            Ok(listener) => {
-                let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Audio Cortex Online (Muted for warmup)".to_string()));
-                Some(listener)
-            },
+        // Corrected New Signature: Thoughts, Ears, RMS
+        let mut ears = senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears, tx_rms)
+            .expect("Audio Listener init failed");
+             
+        ears.set_mute(true); // Mute during warmup
+
+        let mut current_stimulus = 0.0; 
+
+        // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
+        let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<String>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
+            Ok((tx, rx)) => (Some(tx), Some(rx)),
             Err(e) => {
-                let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("Audio Cortex FAILED: {}", e)));
-                None
+                let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("Neocortex DEAD: {}", e)));
+                (None, None)
             }
         };
 
-        // 3. Conectar el Oído (Legacy Audio Stream for Stats)
-        let (tx_audio, rx_audio) = mpsc::channel();
-        let _audio_stream = senses::audio::start_listening(tx_audio)
-            .expect("FALLO CRÍTICO: No se pudo conectar el oído legacy.");
-        
-        let mut current_stimulus = 0.0;
-        let suavizado = 0.2;
-        let mut last_entropy = 0.0;
-        let mut thought_buffer: Vec<Thought> = Vec::new();
-
-        // Memoria de Corto Plazo (10 segundos a 60Hz)
-        let mut memory = core::memory::AudioMemory::new(10, FRECUENCIA_HZ as usize);
-        
-        // SISTEMA 2: NEOCORTEX (Estructural)
-        let mut neocortex = core::neocortex::Neocortex::new();
-        let mut current_log = "Neocortex Online.".to_string();
-
-        // SENTIDO 3: PROPRIOCEPCION (Cuerpo)
+        // 5. Otros Sentidos
         let (tx_body, rx_body) = mpsc::channel::<senses::proprioception::BodyStatus>();
         senses::proprioception::spawn_monitor(tx_body);
         let mut last_body_state = senses::proprioception::BodyStatus { cpu_usage: 0.0, ram_usage: 0.0 };
 
-        // SENTIDO 4: TACTO (Presencia)
         let mut tactile = senses::tactile::ActivityMonitor::new();
-        let mut is_dreaming = false;
         
-        // Warmup Timer
+        // Estado
+        let mut is_dreaming = false;
+        let mut thought_buffer: Vec<Thought> = Vec::new();
         let start_time = Instant::now();
         let mut warmup_done = false;
+        let mut current_log = "Neocortex Initializing...".to_string();
 
-        // 4. Inicializar Neocórtex (Brain - Phi-3)
-    let mut brain: Option<_> = match CognitiveCore::new("Phi-3-mini-4k-instruct-q4.gguf", tx_thoughts.clone()) {
-        Ok(b) => {
-            Some(b)
-        },
-        Err(e) => {
-            let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("Neocortex DEAD: {}", e)));
-            None
-        }
-    };
-        
+        let mut rng = rand::thread_rng();
+        let mut current_entropy = 0.0; // Track entropy for memory tagging
 
         // Loop de Control (Física)
         loop {
-            // A. CHECK PRESENCE & CHEMISTRY
-            let _time_since_active = tactile.check_activity();
-            
-            // ... (Warmup Logic) ...
-            if !warmup_done && start_time.elapsed().as_secs() > 5 {
+            let start = Instant::now();
+
+            // A. CHECK ACTIVITY
+             let _time_since_active = tactile.check_activity();
+             while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
+
+             // B. UPDATE AUDIO STIMULUS (Real-Time RMS)
+             while let Ok(rms) = rx_rms.try_recv() {
+                 current_stimulus = rms; 
+             }
+
+             if !warmup_done && start_time.elapsed().as_secs() > 5 {
                 warmup_done = true;
-                if let Some(ref e) = ears {
-                    e.set_mute(false);
-                }
-                let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Warmup Complete. Sensory Gates OPEN.".to_string()));
+                ears.set_mute(false);
+                crate::actuators::voice::speak("Sistemas auditivos y semánticos online.".to_string(), tx_thoughts.clone());
+                let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Senses OPEN.".to_string()));
             }
 
-            // ... (Sleep Logic) ...
+            if last_body_state.cpu_usage > 90.0 { is_dreaming = true; } else { is_dreaming = false; }
 
-            // HANDLE THOUGHT CHANNEL
+            // SLEEP CONSOLIDATION (Hippocampus 2.0)
+            if is_dreaming && rng.gen_bool(0.005) { // Occasional consolidation during sleep
+                if let Ok(forgotten) = hippocampus.consolidate_sleep() {
+                    if forgotten > 0 {
+                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💤 Sleep Cycle: Pruned {} weak memories.", forgotten)));
+                    }
+                }
+            }
+
+            // C. HANDLE THOUGHTS (Buffer for TUI)
             while let Ok(thought) = rx_thoughts.try_recv() {
                 thought_buffer.push(thought);
-                if thought_buffer.len() > 20 {
-                    thought_buffer.remove(0);
-                }
+                if thought_buffer.len() > 30 { thought_buffer.remove(0); }
             }
-            
-            // HANDLE EAR CHANNEL (COGNITIVA)
+
+            // D. HANDLE HEARING (Cognitive & Memory)
             while let Ok(heard_text) = rx_ears.try_recv() {
-                if let Some(ref mut cortex) = brain {
-                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Thinking...".to_string()));
-                    let response = cortex.think(&heard_text);
-                    crate::actuators::voice::speak(response, tx_thoughts.clone());
+                // 1. Habituación (Boredom Sensor)
+                if let Ok(similarity) = hippocampus.check_novelty(&heard_text) {
+                     if similarity > 0.85 {
+                         chemistry.adenosine += 0.1; // Increase Fatigue/Boredom
+                         let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("Boredom spike (Sim: {:.2})", similarity)));
+                     }
+                }
+
+                // 2. Memorizar (Volatile RAM)
+                let _ = hippocampus.remember(&heard_text, "acoustic_input", current_entropy);
+
+                // 3. Recordar (RAG)
+                let context = hippocampus.recall_relevant(&heard_text);
+                if context.is_some() {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🧠 RAG: Context Retrieved.".to_string()));
+                }
+
+                // 4. Enviar al Cortex
+                if let Some(ref tx) = tx_cortex {
+                    let bio_state = ego.get_state_description();
+                    let somatic_desc = format!("CPU: {:.1}%", last_body_state.cpu_usage);
+                    
+                    let input = CortexInput {
+                        text: heard_text.clone(),
+                        bio_state,
+                        somatic_state: somatic_desc,
+                        long_term_memory: context,
+                    };
+                    let _ = tx.send(input);
                 } else {
-                    let _ = tx_thoughts.send(Thought::new(MindVoice::System, "Brain dead. Echoing fallback.".to_string()));
                     crate::actuators::voice::speak(heard_text, tx_thoughts.clone());
                 }
             }
 
-            // B. INPUT SENSORIAL
-            let mut target_stimulus;
-            
-            if !is_dreaming {
-                // MODO ONLINE: Escuchar al Mundo Real
-                target_stimulus = current_stimulus; // Mantener inercia
-                while let Ok(val) = rx_audio.try_recv() {
-                    target_stimulus = val;
+            // E. HANDLE CORTEX OUTPUT
+            if let Some(ref rx) = rx_cortex_out {
+                while let Ok(response) = rx.try_recv() {
+                    let _ = hippocampus.remember(&response, "self_thought", current_entropy);
+                    crate::actuators::voice::speak(response.clone(), tx_thoughts.clone());
+                    // Corrected MindVoice
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, response));
                 }
-            } else {
-                // MODO DREAMING: Aislamiento
-                target_stimulus = 0.0;
-                while let Ok(_) = rx_audio.try_recv() {}
-            }
-            
-            current_stimulus = current_stimulus + (target_stimulus - current_stimulus) * suavizado;
-
-            // 2. Cuerpo (Propriocepción)
-            if let Ok(body) = rx_body.try_recv() {
-                last_body_state = body;
             }
 
-            memory.push(current_stimulus);
-
-            // C. NEURO-DINÁMICA (Imagination Engine)
-            let mut rng = rand::thread_rng();
-            
-            // Bias: Estrés Metabólico y Cortisol
-            let metabolic_stress = (last_body_state.cpu_usage / 100.0).max(0.0) * 0.5; 
-            let chemical_stress = chemistry.cortisol * 0.5;
-            let total_stress = metabolic_stress + chemical_stress;
-            
-            let excitation_strength = if is_dreaming { 0.5 } else { 5.0 * current_stimulus };
-
-            // LOGIC: RUMINATION (Active Boredom)
-            let is_ruminating = !is_dreaming && chemistry.dopamine < 0.2 && chemistry.adenosine < 0.8;
-            
-            // REPLAY MEMORY (Si soñamos o rumiamos)
-            let dream_memory = if is_dreaming || is_ruminating { 
-                hippocampus.replay_memory() 
-            } else { 
-                None 
-            };
-            
-            if is_ruminating && dream_memory.is_some() {
-                 current_log = "🤔 RUMINATING... Processing Past Trauma".to_string();
-            }
-
-            let input_noise: Vec<f32> = (0..ego.current_size())
+            // F. PHYSICS
+            let excitation = if is_dreaming { 0.8 } else { 0.2 };
+            let input_noise: Vec<f32> = (0..NEURONAS)
                 .map(|i| {
-                    let mut signal = 0.0;
-                    
-                    if is_dreaming || is_ruminating {
-                if let Some(ref mem) = dream_memory {
-                        // Replay de memoria auditiva (RUMINATION or DREAM)
-                        if is_dreaming {
-                             // En sueños, es caótico. 
-                             signal = (rng.gen::<f32>() - 0.5) * excitation_strength; 
-                        } else {
-                            // RUMINATION (Awake but internal)
-                            // Aquí el input ES la memoria, proyectada en todas las neuronas
-                            // Simplificación: Proyectar el scalar audio a vector
-                            signal = mem.stimulus * 5.0; 
-                        }
-                    } else {
-                         // Sueño primitivo (Ruido Rosa) si no hay memorias
-                         signal = (rng.gen::<f32>() - 0.5) * excitation_strength;
+                    let mut noise = (rng.gen::<f32>() - 0.5) * excitation;
+                    // Inject Audio to first 30 neurons
+                    if i < 30 {
+                         noise += current_stimulus * 5.0; 
                     }
-                } else {
-                    // PERCEPCIÓN
-                    signal = (rng.gen::<f32>() - 0.5) * excitation_strength;
-                }
-                
-                signal + ((rng.gen::<f32>() - 0.5) * total_stress)
-            })
-            .collect();
-        let input_vector = DVector::from_vec(input_noise);
-
-        // D. PROCESO (Sistema 1)
-        let entropy = ego.tick(&input_vector);
-
-        // RUMINATION CHECK (Did we just replay a memory?)
-        if !is_dreaming && dream_memory.is_some() {
-            let mem = dream_memory.as_ref().unwrap();
+                    noise
+                })
+                .collect();
+            let input_vector = DVector::from_vec(input_noise);
+            let entropy = ego.tick(&input_vector);
             
-            // Learning: Did we reduce entropy compared to original trauma?
-            if entropy < mem.original_entropy {
-                // Resolution / Habituation
-                chemistry.dopamine += 0.05; // Satisfaction
-                current_log = format!("[RUMINATION] Processed Trauma. Resolution: SUCCESS (H {:.2} -> {:.2})", mem.original_entropy, entropy);
-            } else {
-                // Re-Traumatization
-                chemistry.cortisol += 0.01;
-                // current_log = "[RUMINATION] Failed to Process. Stress Increased.".to_string();
-            }
-        }
+            current_entropy = entropy; // Update for next tick
 
-        // E. OBSERVACIÓN (Sistema 2)
-        let mut is_trauma_tick = false;
+            chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, false, ego.current_size());
 
-        if let Some(event) = neocortex.observe(entropy) {
-            current_log = format!("[OBSERVER] {}", event);
-            
-            match event {
-                core::neocortex::CognitiveEvent::Neurogenesis => {
-                    if ego.current_size() < 500 {
-                        ego.neurogenesis(10);
-                        current_log = format!("[GROWTH] Brain expanded to {} neurons.", ego.current_size());
-                    }
-                },
-                core::neocortex::CognitiveEvent::Trauma(_) => {
-                    is_trauma_tick = true;
-                    // Guardar Trauma en Hipocampo (Audio Stimulus + Entropy)
-                    // Usamos target_stimulus del momento (causante)
-                    if !is_dreaming {
-                        hippocampus.remember(target_stimulus, entropy); 
-                    }
-                },
-                _ => {}
-            }
-        }
-        
-        // UPDATE CHEMISTRY
-        chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, is_trauma_tick, ego.current_size());
-
-        // F. APOPTOSIS (Solo en sueños profundos)
-        if is_dreaming && rng.gen_bool(0.005) { // Baja probabilidad por tick
-            let pruned = ego.prune_inactive_neurons();
-            if pruned > 0 {
-                current_log = format!("✂️ APOPTOSIS: Pruned {} dead neurons.", pruned);
-            }
-        }
-
-        // Monitor de Estado Log
-        if is_dreaming && rng.gen_bool(0.01) && current_log.contains("Sleep") {
-             // Random dream logs...
-             current_log = "[DREAM] REM Cycle Active...".to_string();
-        }
-
-            if last_body_state.cpu_usage > 80.0 {
-                 current_log = format!("[BODY] WARNING: High Metabolic Rate ({:.1}%)", last_body_state.cpu_usage);
-            }
-
-            // F. TELEMETRÍA PACKET
-            let status = if is_dreaming { "DREAMING" } // REM
-                         else if chemistry.cortisol > 0.8 { "PANIC" } 
-                         else if chemistry.dopamine < 0.2 { "BORED" }
-                         else { "ONLINE" };
-            
-            let target_fps = if is_dreaming { 20 } else { FRECUENCIA_HZ }; // 20Hz sueños para verlos mejor
-
-            let telemetry = tui::Telemetry {
-                audio_rms: current_stimulus, 
-                audio_peak: target_stimulus,
-                entropy,
-                neuron_active_count: ego.current_size(), 
-                system_status: status.to_string(),
-                last_entropy_delta: entropy - last_entropy,
-                fps: target_fps as f64,
-                cpu_load: last_body_state.cpu_usage,
-                ram_load: last_body_state.ram_usage,
-                log_message: Some(current_log.clone()),
-                // Chemistry
-                adenosine: chemistry.adenosine,
-                dopamine: chemistry.dopamine,
-                cortisol: chemistry.cortisol,
-                thoughts: thought_buffer.clone(), // Clone output
+            // G. TELEMETRY SEND
+            let status = if is_dreaming { "DREAMING" } else { "AWAKE" };
+            let telem = tui::Telemetry {
+                 fps: 60.0,
+                 audio_rms: current_stimulus, 
+                 audio_peak: 0.0,
+                 entropy: entropy,
+                 system_status: status.to_string(),
+                 dopamine: chemistry.dopamine,
+                 cortisol: chemistry.cortisol,
+                 adenosine: chemistry.adenosine,
+                 thoughts: thought_buffer.clone(),
+                 cpu_load: last_body_state.cpu_usage,
+                 ram_load: last_body_state.ram_usage,
+                 log_message: Some(current_log.clone()),
+                 last_entropy_delta: 0.0,
+                 neuron_active_count: ego.current_size() // FIX: Send actual size
             };
-            last_entropy = entropy;
+            let _ = tx_telemetry.send(telem);
 
-            // Enviar al Frontend
-            let _ = tx_telemetry.send(telemetry);
-
-            // Ritmo dinámico
-            thread::sleep(Duration::from_millis(1000 / target_fps));
+            let elapsed = start.elapsed();
+            if elapsed < Duration::from_millis(1000 / FRECUENCIA_HZ) {
+                thread::sleep(Duration::from_millis(1000 / FRECUENCIA_HZ) - elapsed);
+            }
         }
     });
 
-    // --- MAIN THREAD (Frontend TUI) ---
-    tui::run_tui(rx_telemetry)?;
+    // --- MAIN THREAD: TUI RENDERING ---
+    let mut last_telemetry = tui::Telemetry::default();
+    
+    // History Buffers for Charts
+    let mut audio_history: Vec<u64> = vec![0; 100]; // Sparkline data (Integer)
+    let mut entropy_history: Vec<(f64, f64)> = Vec::new(); // Scatter chart
+    let window_width = 10.0;
+    let start_app_time = Instant::now();
+
+    loop {
+        // Update State
+        if let Ok(data) = rx_telemetry.try_recv() {
+            // Update Histograms
+            let val = (data.audio_rms * 100.0) as u64;
+            audio_history.push(val);
+            if audio_history.len() > 100 { audio_history.remove(0); }
+
+            let time = start_app_time.elapsed().as_secs_f64();
+            entropy_history.push((time, data.entropy as f64));
+            // Keep window
+            entropy_history.retain(|&(t, _)| t > time - window_width);
+
+            last_telemetry = data;
+        }
+
+        // Draw
+        terminal.draw(|f| {
+            tui::ui(
+                f, 
+                &last_telemetry, 
+                &audio_history, 
+                &entropy_history, 
+                start_app_time.elapsed().as_secs_f64(), 
+                window_width
+            );
+        })?;
+
+        // Inputs
+        if event::poll(Duration::from_millis(16))? {
+            if let Event::Key(key) = event::read()? {
+                if key.code == KeyCode::Char('q') {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Cleanup
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
 
     Ok(())
 }

@@ -1,53 +1,52 @@
-use nalgebra::DVector;
-use std::collections::VecDeque;
-use std::time::Instant;
-use rand::prelude::*;
-
-const MAX_MEMORIES: usize = 50;
-
-#[derive(Clone, Debug)]
-pub struct Memory {
-    pub stimulus: f32,
-    pub original_entropy: f32,
-    pub timestamp: Instant,
-}
+use crate::core::memory_vector::VectorStore;
+use anyhow::Result;
 
 pub struct Hippocampus {
-    memories: VecDeque<Memory>,
+    store: VectorStore,
 }
 
 impl Hippocampus {
-    pub fn new() -> Self {
-        Self {
-            memories: VecDeque::new(),
-        }
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            store: VectorStore::new()?,
+        })
     }
 
-    /// Guarda un recuerdo (Input Audio + Entropia que causó)
-    pub fn remember(&mut self, stimulus: f32, entropy: f32) {
-        // Política de Olvido: FIFO
-        if self.memories.len() >= MAX_MEMORIES {
-            self.memories.pop_front();
-        }
-        self.memories.push_back(Memory {
-            stimulus,
-            original_entropy: entropy,
-            timestamp: Instant::now(),
-        });
+    /// Guarda un evento en la memoria a largo plazo (Volatile RAM)
+    pub fn remember(&mut self, text: &str, context: &str, entropy: f32) -> Result<()> {
+        self.store.add(text.to_string(), vec![context.to_string()], entropy)
     }
 
-    /// Retorna un recuerdo aleatorio para Rumiar
-    pub fn replay_memory(&self) -> Option<Memory> {
-        if self.memories.is_empty() {
+    /// Retorna similitud máxima (0.0 - 1.0) para detectar Habituación
+    pub fn check_novelty(&self, text: &str) -> Result<f32> {
+        self.store.get_max_similarity(text)
+    }
+
+    /// Ciclo de Sueño: Consolida recuerdos importantes y limpia RAM
+    pub fn consolidate_sleep(&mut self) -> Result<usize> {
+        self.store.consolidate_memories()
+    }
+
+    /// Dada una situación actual, recupera recuerdos relevantes
+    pub fn recall_relevant(&self, query: &str) -> Option<String> {
+        let results = self.store.search(query, 3).ok()?;
+        
+        if results.is_empty() {
             return None;
         }
-        let mut rng = rand::thread_rng();
-        let index = rng.gen_range(0..self.memories.len());
-        self.memories.get(index).cloned()
-    }
 
-
-    pub fn memory_count(&self) -> usize {
-        self.memories.len()
+        // Formatea los recuerdos en un bloque de texto para el Prompt
+        let mut block = String::from("--- MEMORIA A LARGO PLAZO ---\n");
+        for (text, score) in results {
+            if score > 0.4 { // Umbral de relevancia
+                block.push_str(&format!("- (Similitud {:.2}): {}\n", score, text));
+            }
+        }
+        
+        if block.len() > 30 {
+            Some(block)
+        } else {
+            None
+        }
     }
 }

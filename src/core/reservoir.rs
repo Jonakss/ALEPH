@@ -151,4 +151,18 @@ impl FractalReservoir {
     pub fn get_state(&self) -> &DVector<f32> {
         &self.state
     }
+
+    /// Verbaliza el estado del reservorio para el LLM
+    pub fn get_state_description(&self) -> String {
+        let variance = self.state.variance();
+        if variance < 0.05 {
+            "Estancamiento. Silencio estático. Aburrimiento profundo.".to_string()
+        } else if variance < 0.2 {
+            "Calma lúcida. Flujo suave.".to_string()
+        } else if variance < 0.8 {
+            "Actividad elevada. Pensamiento divergente. Curiosidad.".to_string()
+        } else {
+            format!("CAOS. Ruido excesivo (Entropía: {:.2}). Pánico.", variance)
+        }
+    }
 }

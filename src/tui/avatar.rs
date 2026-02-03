@@ -13,6 +13,7 @@ pub fn get_face(telemetry: &Telemetry) -> Face {
             ascii: r#"
   [ -     - ]
    (  z z  )
+   SOÑANDO
             "#.to_string(),
             color: Color::Magenta,
         };
@@ -24,6 +25,7 @@ pub fn get_face(telemetry: &Telemetry) -> Face {
             ascii: r#"
   [ @     @ ]
    (  !!!  )
+    PÁNICO
             "#.to_string(),
             color: Color::Red,
         };
@@ -35,6 +37,7 @@ pub fn get_face(telemetry: &Telemetry) -> Face {
             ascii: r#"
   [ ^     ^ ]
    (  UwU  )
+    FLUJO
             "#.to_string(),
             color: Color::Cyan,
         };
@@ -46,6 +49,7 @@ pub fn get_face(telemetry: &Telemetry) -> Face {
             ascii: r#"
   [ ?     . ]
    (   o O )
+   PENSANDO
             "#.to_string(), // Thinking / Ruminating
             color: Color::Yellow,
         };
@@ -56,6 +60,7 @@ pub fn get_face(telemetry: &Telemetry) -> Face {
         ascii: r#"
   [ o     o ]
    (  ___  )
+   ATENTO
         "#.to_string(),
         color: Color::Green,
     }

@@ -12,7 +12,7 @@ pub fn start_listening(tx: Sender<f32>) -> Result<cpal::Stream, anyhow::Error> {
     let device = host.default_input_device()
         .ok_or_else(|| anyhow::anyhow!("No input device found"))?;
     
-    println!("👂 Oído Conectado: {}", device.name().unwrap_or("Unknown".to_string()));
+    // println!("👂 Oído Conectado: {}", device.name().unwrap_or("Unknown".to_string()));
 
     // 2. Configuración del stream
     let config = device.default_input_config()?;
@@ -39,7 +39,9 @@ where
     T: cpal::Sample + cpal::SizedSample, 
     f32: From<T>,
 {
-    let err_fn = |err| eprintln!("❌ Error en el oído: {}", err);
+    let err_fn = |err| {
+        // eprintln!("❌ Error en el oído: {}", err);
+    };
 
     let stream = device.build_input_stream(
         config,

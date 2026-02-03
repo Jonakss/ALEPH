@@ -11,7 +11,7 @@ pub fn speak(text: String, tx: Sender<Thought>) {
         use std::io::Write;
         
         // 1. Start Piper process
-        let mut piper_child = match Command::new("./piper/piper")
+        let mut piper_child = match Command::new("./piper/piper/piper")
             .args(&["--model", "./piper/es_ES-sharvard-medium.onnx", "--output_raw"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

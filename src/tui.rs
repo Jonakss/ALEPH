@@ -1,6 +1,6 @@
 use ratatui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
@@ -143,7 +143,7 @@ mod monologue;
 
 // ...
 
-fn ui(
+pub fn ui(
     f: &mut Frame,
     telemetry: &Telemetry,
     audio_history: &[u64],
@@ -257,33 +257,47 @@ fn ui(
     f.render_widget(gauge, status_left_chunks[0]);
 
     // Derived Metrics & Text Stats (Use previous logic)
-    let energy = (1.0 - telemetry.adenosine).max(0.0);
-    let resilience = (telemetry.neuron_active_count as f32 / 100.0).max(1.0);
-    
+    // Helper for visual bars
+    let make_bar = |val: f32, color: Color| -> Span {
+        let width: usize = 15;
+        let filled = (val.clamp(0.0, 1.0) * width as f32) as usize;
+        let empty = width.saturating_sub(filled);
+        let s = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+        Span::styled(s, Style::default().fg(color))
+    };
+
     let text = vec![
         Line::from(vec![Span::raw("System Status: "), Span::styled(telemetry.system_status.clone(), status_style)]),
         Line::from(vec![Span::raw(format!("Tick Rate: {:.1} Hz", telemetry.fps))]),
         Line::from(vec![Span::raw(format!("Brain Size: {} neurons", telemetry.neuron_active_count))]),
-        Line::from(vec![Span::raw(format!("Resilience: x{:.2} (Stamina Multiplier)", resilience))]),
         Line::from(""),
         Line::from(vec![Span::styled("--- NEURO-METABOLISM ---", Style::default().add_modifier(Modifier::BOLD))]),
         Line::from(vec![
-            Span::raw("ENERGY: "),
-            Span::styled(format!("{:.0}%", energy * 100.0), Style::default().fg(if energy < 0.2 { Color::Red } else { Color::Green }).add_modifier(Modifier::BOLD)),
+            Span::raw("DOPAMINE: "),
+            make_bar(telemetry.dopamine, Color::Cyan),
+            Span::raw(format!(" {:.0}% (Interest)", telemetry.dopamine * 100.0)),
         ]),
         Line::from(vec![
-            Span::raw("Fatigue (Adenosine): "),
-            Span::styled(format!("{:.0}%", telemetry.adenosine * 100.0), Style::default().fg(Color::DarkGray)),
+            Span::raw("CORTISOL: "),
+            make_bar(telemetry.cortisol, Color::Magenta),
+            Span::raw(format!(" {:.0}% (Stress)", telemetry.cortisol * 100.0)),
         ]),
         Line::from(vec![
-            Span::raw("Interest (Dopamine): "),
-            Span::styled(format!("{:.0}%", telemetry.dopamine * 100.0), Style::default().fg(Color::Cyan)),
+            Span::raw("ADENOSINE:"),
+            make_bar(telemetry.adenosine, Color::DarkGray),
+            Span::raw(format!(" {:.0}% (Fatigue)", telemetry.adenosine * 100.0)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("CPU Load: "),
+            make_bar(telemetry.cpu_load / 100.0, if telemetry.cpu_load > 80.0 { Color::Red } else { Color::Green }),
+            Span::raw(format!(" {:.1}%", telemetry.cpu_load)),
         ]),
         Line::from(vec![
-            Span::raw("Stress (Cortisol):   "),
-            Span::styled(format!("{:.0}%", telemetry.cortisol * 100.0), Style::default().fg(Color::Magenta)),
+            Span::raw("RAM Load: "),
+            make_bar(telemetry.ram_load, if telemetry.ram_load > 0.9 { Color::Red } else { Color::Green }),
+            Span::raw(format!(" {:.1}%", telemetry.ram_load * 100.0)),
         ]),
-        Line::from(vec![Span::raw(format!("CPU Strain: {:.1}%", telemetry.cpu_load))]),
     ];
     let stats = Paragraph::new(text)
         .block(Block::default().title(" Telemetry ").borders(Borders::ALL))
