@@ -127,7 +127,7 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // METABOLIC CLOCK
         let mut rumination_timer = 0.0;
-        let mut target_fps = 60.0;
+        // let mut target_fps = 60.0;
         
         timeline.push(Thought::new(MindVoice::System, "Neocortex Initializing...".to_string()));
 

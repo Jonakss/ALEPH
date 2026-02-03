@@ -98,6 +98,10 @@ impl CognitiveCore {
                          if msg.entropy > 0.8 || msg.adenosine > 0.7 {
                              let _ = thread_thought_tx.send(Thought::new(MindVoice::Chem, 
                                  format!("🧪 Bio-Modulation: T={:.2} (Chaos), P={:.2} (Focus)", effective_temp, effective_top_p)));
+                         } else {
+                             // DEBUG CRASH: Always log for now
+                             let _ = thread_thought_tx.send(Thought::new(MindVoice::System, 
+                                 format!("🔍 Sampling: T={:.2}, P={:.2}", effective_temp, effective_top_p)));
                          }
                          
                          // Measure inference latency (REAL METABOLISM)

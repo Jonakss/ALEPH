@@ -1,9 +1,6 @@
-use std::sync::mpsc::Sender;
-use std::thread;
-
 use crate::core::thought::{Thought, MindVoice};
 use crate::core::llm::CortexInput;
-use rand::Rng;
+// use rand::Rng; // Removed unused import
 
 /// Inner Voice - Silent rumination thread
 /// TRIGGERED BY BODY PULSE.
@@ -16,8 +13,6 @@ pub fn spawn_inner_voice(
 
     thread::spawn(move || {
         let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🧠 Bio-Clock: Inner Voice Synced.".to_string()));
-        
-        let mut last_rumination = String::new();
         
         // Wait for body pulse
         while let Ok(_) = rx_pulse.recv() {
