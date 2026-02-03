@@ -35,7 +35,7 @@ impl AudioListener {
         
         let state = Arc::new(Mutex::new(ctx));
         let is_muted = Arc::new(Mutex::new(false)); // START LISTENING
-        let attention_threshold = Arc::new(Mutex::new(0.001)); // MAX SENSITIVITY
+        let attention_threshold = Arc::new(Mutex::new(0.00001)); // ULTRA SENSITIVE
 
         // 2. Setup Audio Input
         let host = cpal::default_host();
@@ -130,12 +130,22 @@ impl AudioListener {
         let threshold_clone = attention_threshold.clone();
         let fft_clone = fft_arc.clone();
         let _scratch_clone = fft_scratch.clone();
+        let thought_tx_debug = thought_tx.clone(); // For debug logging
         
         let stream = device.build_input_stream(
             &config.into(),
             move |data: &[f32], _: &_| {
                 // A. Check Metrics (RMS) & FFT
                 let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
+                
+                // DEBUG: Print RMS to stderr every ~100 frames
+                static mut FRAME_COUNT: u32 = 0;
+                unsafe {
+                    FRAME_COUNT += 1;
+                    if FRAME_COUNT % 100 == 0 {
+                        eprintln!("🎧 RMS: {:.6}", rms);
+                    }
+                }
                 
                 // FFT Analysis - NON-BLOCKING (skip if mutex busy)
                 // FFT Analysis
@@ -198,7 +208,9 @@ impl AudioListener {
                 if rms > threshold {
                     if !*recording {
                         *recording = true;
-                        buffer.clear(); 
+                        buffer.clear();
+                        // DEBUG: Log when recording starts
+                        let _ = thought_tx_debug.send(Thought::new(MindVoice::System, format!("🎤 RECORDING (RMS: {:.4})", rms)));
                     }
                     *silence = 0;
                 } else if *recording {
@@ -211,6 +223,10 @@ impl AudioListener {
                     
                     if *silence > 45 { // ~0.75s silence (more generous)
                         *recording = false;
+                        
+                        // DEBUG: Log when sending to Whisper
+                        let samples_len = buffer.len();
+                        let _ = thought_tx_debug.send(Thought::new(MindVoice::System, format!("🎧 SENT TO WHISPER ({} samples)", samples_len)));
                         
                         // E. Send to Worker
                         let samples = buffer.clone();
