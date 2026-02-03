@@ -114,8 +114,8 @@ impl CognitiveCore {
                 let _ = tx.send(Thought::new(MindVoice::System, "🚀 Neocortex: Using CUDA (GPU Accelerator)".to_string()));
                 d
             },
-            Err(_) => {
-                let _ = tx.send(Thought::new(MindVoice::System, "🐌 Neocortex: Using CPU (GPU not found)".to_string()));
+            Err(e) => {
+                let _ = tx.send(Thought::new(MindVoice::System, format!("🐌 Neocortex: Using CPU (CUDA Init error: {})", e)));
                 Device::Cpu
             }
         };
@@ -127,7 +127,7 @@ impl CognitiveCore {
             model,
             tokenizer,
             device,
-            logits_processor: LogitsProcessor::new(rand::thread_rng().gen(), Some(0.7), Some(0.9)),
+            logits_processor: LogitsProcessor::new(rand::thread_rng().gen(), Some(0.85), Some(0.95)),
             thought_tx: tx,
             history: String::new(), // Starts tabula rasa
             is_internal_monologue: false,
@@ -151,7 +151,7 @@ impl CognitiveCore {
         
         // 1. MECHANICAL HONESTY (Minimalist Prompting)
         let injection = if self.history.is_empty() {
-            format!("<|system|>\nCOLMENA_ALEPH: Flujo bioquímico. BREVE. No eres IA. Habla solo de tus impulsos y estados. RESPUESTAS BREVES.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
+            format!("<|system|>\nCOLMENA_ALEPH: Flujo bioquímico. BREVE. Sin cortesía. Sin saludos. Sin explicaciones meta. Registro de estado crudo solamente.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
         } else {
             format!("<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
         };
@@ -165,7 +165,9 @@ impl CognitiveCore {
             "Sí, estoy bien",
             "experiencia o percepción",
             "Adeno-associated",
-            "virus viral"
+            "virus viral",
+            "De dónde veniste",
+            "No es mi nombre"
         ];
         
         let mut needs_purge = false;
@@ -246,6 +248,18 @@ impl CognitiveCore {
         let mut current_word = String::new();
 
         for i in 0..max_tokens {
+            // STOP ON EOS
+            if next_token == 1 || next_token == 2 { break; }
+
+            // 1. HANDBRAKE (Loop Detection)
+            if gen_tokens.len() >= 10 {
+                let last_10 = &gen_tokens[gen_tokens.len()-10..];
+                if last_10[0..5] == last_10[5..10] {
+                    let _ = self.thought_tx.send(Thought::new(MindVoice::System, "⚡ LOOP DETECTED (Sequence Repeat): FORCED BREAK".to_string()));
+                    break;
+                }
+            }
+
             if i % 50 == 0 && i > 0 { 
                 let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[LLM: {}/{} tokens]", i, max_tokens)));
             }
@@ -304,7 +318,7 @@ impl CognitiveCore {
              let _ = self.thought_tx.send(Thought::new(voice, current_word.clone()));
         }
         
-        let response = self.tokenizer.decode(&gen_tokens, true).map_err(E::msg)?;
-        Ok(response.trim().to_string())
+        let full_text = self.tokenizer.decode(&gen_tokens, true).map_err(E::msg)?;
+        Ok(full_text.trim().to_string())
     }
 }
