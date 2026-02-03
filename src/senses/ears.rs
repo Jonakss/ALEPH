@@ -81,16 +81,16 @@ impl AudioListener {
                       i += ratio;
                   }
 
-                  // Gag removing for debug
-                  // let _print_gag = gag::Gag::stdout().ok();
-                  // let _err_gag = gag::Gag::stderr().ok();
-                  
+                  // Gag output
+                  let _print_gag = gag::Gag::stdout().ok();
+                  let _err_gag = gag::Gag::stderr().ok();
+
                   let state = worker_state.lock().unwrap();
                   if let Ok(mut state_session) = state.create_state() {
                         if let Ok(_) = state_session.full(params, &resampled[..]) {
-                            // Release gags (commented out)
-                            // drop(_print_gag); 
-                            // drop(_err_gag);
+                            // Release gags
+                            drop(_print_gag); 
+                            drop(_err_gag);
 
                             let num_segments = state_session.full_n_segments().unwrap();
                             let mut text = String::new();

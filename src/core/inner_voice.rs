@@ -21,29 +21,16 @@ pub fn spawn_inner_voice(
         
         // Wait for body pulse
         while let Ok(_) = rx_pulse.recv() {
-            // MECHANICAL HONESTY: Rumination seed based on Entropy & Random Chaos
-            // Instead of hardcoded prompts, we use the randomness of the moment
-            let entropy_seed: u8 = rand::thread_rng().gen();
+            // MECHANICAL HONESTY: No scripts.
+            // We provide the context (bio_state, adenosine, etc) and letting the LLM decide WHAT to think.
+            // The "prompt" is just a trigger.
             
-            let prompt = match entropy_seed % 5 {
-                0 => "Analizar mi estado interno actual.",
-                1 => "Revisar la coherencia de mis pensamientos recientes.",
-                2 => "¿Hay discordancia entre mi biología y mis objetivos?",
-                3 => "Explorar el concepto de 'Yo' en este ciclo.",
-                _ => "Silencio introspectivo...",
-            };
-
-            // Avoid repeating (simple check)
-            if prompt == last_rumination { continue; }
-            last_rumination = prompt.to_string();
+            let prompt = "Genera un pensamiento interno espontáneo basado en mi estado actual (Sin guión).";
             
-            // Send to Cortex for internal processing
-            // Inner voice: no cognitive impairment (low-stress rumination)
             // Send to Cortex for internal processing
             // Inner voice: no cognitive impairment (low-stress rumination)
             let input = CortexInput {
-                // Change to [SELF REFLECTION] and asking to vocalize
-                text: format!("[SELF REFLECTION] {}. (Vocalize this thought)", prompt),
+                text: format!("[SELF REFLECTION] {}", prompt),
                 bio_state: "Reflexión activa.".to_string(),
                 somatic_state: "Sistema estable.".to_string(),
                 long_term_memory: None,
@@ -56,7 +43,7 @@ pub fn spawn_inner_voice(
             };
             
             let _ = tx_cortex.send(input);
-            let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💭 Rumiación: '{}'", prompt)));
+            let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💭 Rumiación: Generando pensamiento espontáneo...".to_string()));
         }
     });
 
