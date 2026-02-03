@@ -111,7 +111,7 @@ impl CognitiveCore {
         // Force CPU to avoid CUDA OOM conflict with Whisper
         let device = Device::Cpu;
         
-        let tokenizer = Tokenizer::from_file(TOKENIZER_FILE).map_err(E::msg)?;
+        let tokenizer = Tokenizer::from_file(TOKENIZER_FILE).map_err(|e| E::msg(format!("Error cargando tokenizador en {}: {}", TOKENIZER_FILE, e)))?;
         let model = Self::load_model(&device)?;
 
         Ok(Self {
