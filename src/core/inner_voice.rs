@@ -1,6 +1,9 @@
+use std::sync::mpsc::Sender;
+use std::thread;
+
 use crate::core::thought::{Thought, MindVoice};
 use crate::core::llm::CortexInput;
-// use rand::Rng; // Removed unused import
+// use rand::Rng; 
 
 /// Inner Voice - Silent rumination thread
 /// TRIGGERED BY BODY PULSE.

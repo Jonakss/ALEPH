@@ -114,9 +114,22 @@ impl CognitiveCore {
                          } else if msg.cognitive_impairment > 0.8 && rand::thread_rng().gen::<f32>() < msg.cognitive_impairment {
                              ".......".to_string() // Active Silence (Freeze)
                          } else {
-                             // Context Window constriction due to fatigue
-                             let available_tokens = if msg.adenosine > 0.6 { 150 } else { 300 };
-                             core.think_with_limit(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref(), available_tokens)
+                             // CRITICAL: Catch panics from Candle/LLM to prevent thread death
+                             // We use AssertUnwindSafe because we trust that a panic in inference 
+                             // doesn't corrupt the channel state, only the local model state (which is stateless input-output mostly).
+                             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                 let available_tokens = if msg.adenosine > 0.6 { 150 } else { 300 };
+                                 core.think_with_limit(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref(), available_tokens)
+                             }));
+
+                             match result {
+                                 Ok(text) => text,
+                                 Err(_) => {
+                                     let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "💥 Cortex Panic caught. Cooling down...".to_string()));
+                                     thread::sleep(std::time::Duration::from_millis(500)); 
+                                     ".......".to_string() 
+                                 }
+                             }
                          };
                          
                          let latency_ms = start.elapsed().as_millis() as u64;

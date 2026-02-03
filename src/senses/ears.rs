@@ -35,7 +35,7 @@ impl AudioListener {
         
         let state = Arc::new(Mutex::new(ctx));
         let is_muted = Arc::new(Mutex::new(true)); 
-        let attention_threshold = Arc::new(Mutex::new(0.002)); // More sensitive (was 0.005)
+        let attention_threshold = Arc::new(Mutex::new(0.001)); // MAX SENSITIVITY
 
         // 2. Setup Audio Input
         let host = cpal::default_host();
@@ -76,10 +76,14 @@ impl AudioListener {
                   let ratio = sample_rate as f32 / target_rate as f32;
                   let mut resampled = Vec::new();
                   let mut i = 0.0;
+                  
+                  // 1. Resample
                   while (i as usize) < samples.len() {
                       resampled.push(samples[i as usize]);
                       i += ratio;
                   }
+                  
+                  // 2. NORMALIZE removed (User requested RAW audio)
 
                   // Gag output
                   let _print_gag = gag::Gag::stdout().ok();
@@ -102,8 +106,8 @@ impl AudioListener {
                             text = text.trim().to_string();
                             
                             let triggers = [
-                                "[BLANK_AUDIO]", "música", "Subtítulos", "Amara.org", 
-                                "...", "??", "Music", "music"
+                                "[BLANK_AUDIO]", "Subtítulos", "Amara.org", 
+                                "...", "??"
                             ];
                             
                             let is_hallucination = text.len() < 2 
