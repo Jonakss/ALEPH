@@ -41,19 +41,20 @@ impl Neurotransmitters {
         }
 
         // 2. DOPAMINA (Novedad/Recompensa)
-        // Decae naturalmente (Aburrimiento)
-        self.dopamine -= 0.001;
+        // Decae naturalmente (Aburrimiento) - SLOWER DECAY
+        self.dopamine -= 0.0002; 
         
-        // Sube con la entropía (Novedad), pero baja si es Caos (Cortisol alto bloquea dopamina)
-        if entropy > 0.1 && entropy < 0.7 {
-            self.dopamine += 0.002;
+        // Sube con la entropía (Novedad)
+        if entropy > 0.1 && entropy < 0.8 {
+            self.dopamine += 0.001;
         }
 
         // 3. CORTISOL (Estrés)
-        if is_trauma || cpu_load > 80.0 {
-            self.cortisol += 0.01;
+        // More sensitive trigger: CPU > 40% OR High Entropy (Confusion)
+        if is_trauma || cpu_load > 40.0 || entropy > 0.9 {
+            self.cortisol += 0.005;
         } else {
-            self.cortisol -= 0.005; // Recuperación natural
+            self.cortisol -= 0.001; // Slower recovery
         }
 
         // CLAMPING

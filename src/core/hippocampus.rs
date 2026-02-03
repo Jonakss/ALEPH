@@ -27,13 +27,15 @@ impl Hippocampus {
         self.store.consolidate_memories()
     }
 
-    /// Dada una situación actual, recupera recuerdos relevantes
-    pub fn recall_relevant(&self, query: &str) -> Option<String> {
+    /// Dada una situación actual, recupera recuerdos relevantes y su score máximo
+    pub fn recall_relevant(&self, query: &str) -> Option<(String, f32)> {
         let results = self.store.search(query, 3).ok()?;
         
         if results.is_empty() {
             return None;
         }
+
+        let max_score = results.first().map(|(_, s)| *s).unwrap_or(0.0);
 
         // Formatea los recuerdos en un bloque de texto para el Prompt
         let mut block = String::from("--- MEMORIA A LARGO PLAZO ---\n");
@@ -44,9 +46,13 @@ impl Hippocampus {
         }
         
         if block.len() > 30 {
-            Some(block)
+            Some((block, max_score))
         } else {
             None
         }
+    }
+    /// Retorna la cantidad de recuerdos almacenados (Sinapsis Totales)
+    pub fn memory_count(&self) -> usize {
+        self.store.memory_count()
     }
 }

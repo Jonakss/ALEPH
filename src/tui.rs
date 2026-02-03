@@ -4,13 +4,11 @@ use ratatui::{
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, Paragraph, Wrap, Sparkline},
+    widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, Instant};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -20,10 +18,9 @@ use crate::core::thought::Thought;
 
 // Estructura de Telemetría que viene del Backend
 pub struct Telemetry {
-    pub audio_rms: f32,       // 0.0 - 1.0 (volumen)
-    pub audio_peak: f32,      // Pico reciente
+    pub audio_spectrum: crate::senses::ears::AudioSpectrum, // Full Spectrum
     pub entropy: f32,         // 0.0 - 1.0
-    pub neuron_active_count: usize, // Cuantas neuronas dispararon
+    pub neuron_active_count: usize, // Memories (Vectors)
     pub system_status: String,// "FLOW", "PANIC", etc.
     pub last_entropy_delta: f32, // Cambio de entropía
     pub fps: f64,             // Backend ticks per second
@@ -33,14 +30,14 @@ pub struct Telemetry {
     pub adenosine: f32, // Sleep Pressure
     pub dopamine: f32,  // Reward
     pub cortisol: f32,  // Stress
+    pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
     pub thoughts: Vec<Thought>, // Stream of Consciousness
 }
 
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
-            audio_rms: 0.0,
-            audio_peak: 0.0,
+            audio_spectrum: crate::senses::ears::AudioSpectrum::default(),
             entropy: 0.0,
             neuron_active_count: 0,
             system_status: "INIT".to_string(),
@@ -52,91 +49,13 @@ impl Default for Telemetry {
             adenosine: 0.0,
             dopamine: 0.5,
             cortisol: 0.0,
+            insight_intensity: 0.0,
             thoughts: Vec::new(),
         }
     }
 }
 
-pub fn run_tui(rx_telemetry: Receiver<Telemetry>) -> Result<(), anyhow::Error> {
-    // 1. Setup Terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = ratatui::backend::CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // 2. Loop UI
-    let res = run_app(&mut terminal, rx_telemetry);
-
-    // 3. Restore Terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(_err) = res {
-        // println!("{:?}", err);
-    }
-
-    Ok(())
-}
-
-fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    rx: Receiver<Telemetry>,
-) -> io::Result<()> 
-where
-    B::Error: Into<io::Error>, // Fix generic error conversion
-{
-    // Historial para gráficos
-    let mut audio_history: Vec<u64> = vec![0; 100];
-    let mut entropy_history: Vec<(f64, f64)> = Vec::new(); // (time, value)
-    let start_time = Instant::now();
-    let window_width = 10.0; // segundos de historia
-
-    let mut last_telemetry = Telemetry::default();
-
-    loop {
-        // 1. Consumir Telemetría (Non-blocking)
-        // Drenamos el canal para tener el dato más fresco
-        let mut new_data = false;
-        while let Ok(data) = rx.try_recv() {
-            last_telemetry = data;
-            new_data = true;
-        }
-
-        if new_data {
-            // Actualizar históricos
-            let rms_scaled = (last_telemetry.audio_rms * 100.0) as u64;
-            audio_history.push(rms_scaled);
-            if audio_history.len() > 100 {
-                audio_history.remove(0);
-            }
-
-            let now = start_time.elapsed().as_secs_f64();
-            entropy_history.push((now, last_telemetry.entropy as f64));
-            // Limpiar datos viejos
-            entropy_history.retain(|&(t, _)| t > now - window_width);
-        }
-
-        // 2. Dibujar
-        terminal.draw(|f| {
-            ui(f, &last_telemetry, &audio_history, &entropy_history, start_time.elapsed().as_secs_f64(), window_width);
-        }).map_err(Into::into)?; // Convert generic error to io::Error
-
-        // 3. Input Handling (Salir con 'q')
-        if event::poll(Duration::from_millis(16))? { // ~60fps UI poll
-            if let Event::Key(key) = event::read()? {
-                if let KeyCode::Char('q') = key.code {
-                    return Ok(());
-                }
-            }
-        }
-    }
-}
+// Legacy run_tui removed. Functionality handled by main.rs.
 
 mod avatar;
 mod monologue;
@@ -146,7 +65,7 @@ mod monologue;
 pub fn ui(
     f: &mut Frame,
     telemetry: &Telemetry,
-    audio_history: &[u64],
+    // audio_history removed
     entropy_history: &[(f64, f64)],
     curr_time: f64,
     window_width: f64,
@@ -174,16 +93,36 @@ pub fn ui(
     // The previous tool call ended at line 271, so I am replacing the TOP part of function `ui`.
 
 
-    // --- PANEL IZQ: AUDIO INPUT ---
+    // --- PANEL IZQ: AUDIO SPECTRUM (FFT) ---
     let audio_block = Block::default()
-        .title(" 👂 AUDIO ")
+        .title(" 👂 ACOUSTIC SPECTRUM ")
         .borders(Borders::ALL);
+
+    // Prepare Data for Histogram
+    let spectrum = &telemetry.audio_spectrum;
     
-    let sparkline = Sparkline::default()
+    // Scale values for display (boost visual impact)
+    // Adjusted gains after user feedback (Bass was clipping)
+    let val_bass = (spectrum.bass * 150.0).clamp(0.0, 100.0) as u64; 
+    let val_mids = (spectrum.mids * 200.0).clamp(0.0, 100.0) as u64;
+    let val_highs = (spectrum.highs * 300.0).clamp(0.0, 100.0) as u64;
+
+    let bars = vec![
+        ("BASS", val_bass),
+        ("MIDS", val_mids),
+        ("HIGH", val_highs),
+        ("RMS", (spectrum.rms * 100.0) as u64),
+    ];
+
+    let barchart = ratatui::widgets::BarChart::default()
         .block(audio_block)
-        .data(audio_history)
+        .data(&bars)
+        .bar_width(5)
+        .bar_gap(2)
+        .value_style(Style::default().fg(Color::Black).bg(Color::Cyan))
         .style(Style::default().fg(Color::Cyan));
-    f.render_widget(sparkline, top_chunks[0]);
+        
+    f.render_widget(barchart, top_chunks[0]);
 
     // --- PANEL CENTER: RESERVOIR STATE ---
     let reservoir_block = Block::default()

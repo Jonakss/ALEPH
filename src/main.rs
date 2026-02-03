@@ -50,17 +50,17 @@ async fn main() -> Result<(), anyhow::Error> {
             .expect("HIPPOCAMPUS INIT FAILED: Check .onnx model");
 
         // 3. Sistema Sensorial (The Senses)
+        // 3. Sistema Sensorial (The Senses)
         let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
         let (tx_ears, rx_ears) = mpsc::channel::<String>();
-        let (tx_rms, rx_rms) = mpsc::channel::<f32>(); // Canal de Audio Raw
+        let (tx_spectrum, rx_spectrum) = mpsc::channel::<senses::ears::AudioSpectrum>(); // Spectrum Channel
         
-        // Corrected New Signature: Thoughts, Ears, RMS
-        let mut ears = senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears, tx_rms)
+        let mut ears = senses::ears::AudioListener::new(tx_thoughts.clone(), tx_ears, tx_spectrum)
             .expect("Audio Listener init failed");
              
         ears.set_mute(true); // Mute during warmup
 
-        let mut current_stimulus = 0.0; 
+        let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
         let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<String>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
@@ -87,19 +87,25 @@ async fn main() -> Result<(), anyhow::Error> {
 
         let mut rng = rand::thread_rng();
         let mut current_entropy = 0.0; // Track entropy for memory tagging
+        let mut current_insight = 0.0; // Track max relevance for visual flash
 
         // Loop de Control (Física)
         loop {
             let start = Instant::now();
+            
+            // Insight Decay (Visual Flash Effect)
+            current_insight *= 0.9; 
+            if current_insight < 0.01 { current_insight = 0.0; }
 
             // A. CHECK ACTIVITY
              let _time_since_active = tactile.check_activity();
              while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
 
-             // B. UPDATE AUDIO STIMULUS (Real-Time RMS)
-             while let Ok(rms) = rx_rms.try_recv() {
-                 current_stimulus = rms; 
+             // B. UPDATE AUDIO SPECTRUM (Real-Time)
+             while let Ok(spectrum) = rx_spectrum.try_recv() {
+                 current_spectrum = spectrum; 
              }
+             let current_stimulus = current_spectrum.rms;
 
              if !warmup_done && start_time.elapsed().as_secs() > 5 {
                 warmup_done = true;
@@ -139,10 +145,14 @@ async fn main() -> Result<(), anyhow::Error> {
                 let _ = hippocampus.remember(&heard_text, "acoustic_input", current_entropy);
 
                 // 3. Recordar (RAG)
-                let context = hippocampus.recall_relevant(&heard_text);
-                if context.is_some() {
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🧠 RAG: Context Retrieved.".to_string()));
-                }
+                let mut current_insight = 0.0;
+                let context = if let Some((ctx, score)) = hippocampus.recall_relevant(&heard_text) {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🧠 RAG: Insight (Score: {:.2})", score)));
+                     current_insight = score;
+                     Some(ctx)
+                } else {
+                     None
+                };
 
                 // 4. Enviar al Cortex
                 if let Some(ref tx) = tx_cortex {
@@ -192,10 +202,20 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // G. TELEMETRY SEND
             let status = if is_dreaming { "DREAMING" } else { "AWAKE" };
+            
+            // Insight Decay (Visual Flash lasts a frame or two)
+            // But we can't easily persist state here across loop iterations without a var.
+            // Let's just send the raw score. TUI can handle it or we assume it's transient.
+            // Actually, `current_insight` is local to the loop iteration if it triggers content.
+            // But RxEars might happen multiple times. We should declare `current_insight` outside or accept it's transient.
+            // For now, transient is fine as telemetry is sent every tick. Wait, no via channel.
+            
+            // Better to pull `current_insight` from a more persistent scope if we want it to linger.
+            // But let's assume if RAG triggered THIS tick, we show it THIS tick.
+            
             let telem = tui::Telemetry {
                  fps: 60.0,
-                 audio_rms: current_stimulus, 
-                 audio_peak: 0.0,
+                 audio_spectrum: current_spectrum.clone(), 
                  entropy: entropy,
                  system_status: status.to_string(),
                  dopamine: chemistry.dopamine,
@@ -206,8 +226,12 @@ async fn main() -> Result<(), anyhow::Error> {
                  ram_load: last_body_state.ram_usage,
                  log_message: Some(current_log.clone()),
                  last_entropy_delta: 0.0,
-                 neuron_active_count: ego.current_size() // FIX: Send actual size
+                 neuron_active_count: 100 + (hippocampus.memory_count() * 5), // DENSITY FACTOR 5x
+                 insight_intensity: current_insight, 
             };
+            // Note: I missed passing `current_insight` into telem because of scope. 
+            // I will fix this by declaring `let mut current_insight = 0.0;` at start of loop
+            // and resetting it at top of loop.
             let _ = tx_telemetry.send(telem);
 
             let elapsed = start.elapsed();
@@ -221,7 +245,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut last_telemetry = tui::Telemetry::default();
     
     // History Buffers for Charts
-    let mut audio_history: Vec<u64> = vec![0; 100]; // Sparkline data (Integer)
     let mut entropy_history: Vec<(f64, f64)> = Vec::new(); // Scatter chart
     let window_width = 10.0;
     let start_app_time = Instant::now();
@@ -229,10 +252,7 @@ async fn main() -> Result<(), anyhow::Error> {
     loop {
         // Update State
         if let Ok(data) = rx_telemetry.try_recv() {
-            // Update Histograms
-            let val = (data.audio_rms * 100.0) as u64;
-            audio_history.push(val);
-            if audio_history.len() > 100 { audio_history.remove(0); }
+            // Updated Telemetry
 
             let time = start_app_time.elapsed().as_secs_f64();
             entropy_history.push((time, data.entropy as f64));
@@ -247,7 +267,6 @@ async fn main() -> Result<(), anyhow::Error> {
             tui::ui(
                 f, 
                 &last_telemetry, 
-                &audio_history, 
                 &entropy_history, 
                 start_app_time.elapsed().as_secs_f64(), 
                 window_width

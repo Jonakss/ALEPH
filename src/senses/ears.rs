@@ -97,8 +97,8 @@ impl AudioListener {
                         .sum::<f32>() / (end - start).max(1) as f32
                 };
 
-                let bass = get_magnitude(&spectrum_buffer, 1, 6) * 5.0; // Boost
-                let mids = get_magnitude(&spectrum_buffer, 6, 46) * 2.0;
+                let bass = get_magnitude(&spectrum_buffer, 1, 6) * 1.0; // Reduced Gain
+                let mids = get_magnitude(&spectrum_buffer, 6, 46) * 1.5;
                 let highs = get_magnitude(&spectrum_buffer, 46, 200);
 
                 let spectrum = AudioSpectrum {

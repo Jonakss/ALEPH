@@ -1,7 +1,7 @@
 use candle_core::{Device, Tensor, DType};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
-use std::path::PathBuf;
+
 use anyhow::Result;
 use tokenizers::Tokenizer;
 use hf_hub::{api::sync::Api, Repo, RepoType};
@@ -173,5 +173,8 @@ impl VectorStore {
                 self.memories = memories;
             }
         }
+    }
+    pub fn memory_count(&self) -> usize {
+        self.memories.len()
     }
 }
