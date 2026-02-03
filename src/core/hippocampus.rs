@@ -14,6 +14,7 @@ pub struct MemoryOutput {
 pub enum MemoryCommand {
     ProcessStimulus { text: String, entropy: f32 },
     ConsolidateSleep,
+    #[allow(dead_code)]
     ForceSave, // Optional, but we prefer Sleep-based persistence
 }
 
