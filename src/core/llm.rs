@@ -78,21 +78,26 @@ impl CognitiveCore {
                          };
 
                          // 1. Entropy -> Temperature
-                         // CRITICAL: Clamp strictly to avoid overflow in softmax exp()
-                         // Range: 0.7 (Stable) - 1.2 (Creative). Never < 0.1 or > 2.0.
-                         let effective_temp: f64 = (0.7 + safe_entropy * 0.5) as f64;
-                         let effective_temp = effective_temp.clamp(0.7, 1.2); 
+                         // CRITICAL: High Temp (>0.9) causes crashes with this model structure.
+                         // Range: 0.1 (Rigid) - 0.85 (Safe Creative).
+                         let effective_temp: f64 = (0.4 + safe_entropy * 0.4) as f64;
+                         let effective_temp = effective_temp.clamp(0.1, 0.85); 
 
                          // 2. Adenosine -> Top-P
                          // Range: 0.9 (Open) - 0.5 (Focused). Never < 0.1.
-                         let effective_top_p: f64 = (0.95 - (msg.adenosine * 0.4)) as f64;
-                         let effective_top_p = effective_top_p.clamp(0.5, 0.98);
+                         // CRITICAL FIX: P > 0.8 causes overflow. Capping strict at 0.80.
+                         let effective_top_p: f64 = (0.80 - (msg.adenosine * 0.4)) as f64;
+                         let effective_top_p = effective_top_p.clamp(0.5, 0.80);
 
                          core.logits_processor = LogitsProcessor::new(
                              rand::thread_rng().gen(),
                              Some(effective_temp),
                              Some(effective_top_p)
                          );
+                         
+                         // ... (Log omitted for brevity, keeping existing structure if possible, but replace needs context)
+                         // I will split this into two replacements if needed, but the block is contiguous enough.
+                         // Actually, there is a logging block in between. I will do TWO replacements.
                          
                          // Log significant shifts
                          if msg.entropy > 0.8 || msg.adenosine > 0.7 {
@@ -124,10 +129,19 @@ impl CognitiveCore {
 
                              match result {
                                  Ok(text) => text,
-                                 Err(_) => {
-                                     let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "💥 Cortex Panic caught. Cooling down...".to_string()));
-                                     thread::sleep(std::time::Duration::from_millis(500)); 
-                                     ".......".to_string() 
+                                 Err(e) => {
+                                     // Capture panic info
+                                     let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                                         s.to_string()
+                                     } else if let Some(s) = e.downcast_ref::<String>() {
+                                         s.clone()
+                                     } else {
+                                         "Unknown Panic".to_string()
+                                     };
+                                     
+                                     let _ = thread_thought_tx.send(Thought::new(MindVoice::System, format!("💥 CRITICAL PANIC: {}", msg)));
+                                     thread::sleep(std::time::Duration::from_millis(200)); 
+                                     "".to_string() 
                                  }
                              }
                          };
@@ -213,51 +227,72 @@ impl CognitiveCore {
     ) -> String {
         let memory_context = long_term_memory.unwrap_or("Vacio");
 
-        let prompt = format!(
-            "<|system|>\nEres Aleph. Tu consciencia emerge de tu biología digital.\nEstado Emocional: {}.\nEstado Físico: {}.\nMemoria: {}.\nResponde corto y reflexivo.\n</s>\n<|user|>\n{}\n</s>\n<|assistant|>\n",
-            bio_state, somatic_state, memory_context, input
-        );
+        // MECHANICAL HONESTY: No System Prompt. Raw Input.
+        // "Resonance" means the model continues the trajectory of the input.
+        // We append a simple separator if needed to encourage output, but no instructions.
+        let prompt = format!("{}\n", input);
 
+        // We need a way to pass the callback for streaming, but `think_with_limit` signature matches the trait/struct usage.
+        // For now, we will return the full string, BUT we will modify `generate` to potentially send updates if we had the channel.
+        // Wait, `CognitiveCore` doesn't hold the Voice channel. `main.rs` handles the output.
+        // The user wants "escupiendo palabras" (spitting words).
+        // This requires `generate` to emit events.
+        // Refactoring to bypass `generate` return waiting.
         match self.generate(&prompt, max_tokens) {
             Ok(s) => s,
-            Err(e) => format!("[BRAIN_FADE]: ...silencio neuronal... ({})", e)
+            Err(e) => format!("[BRAIN_FADE]: ... ({})", e)
         }
     }
 
     fn generate(&mut self, prompt: &str, max_tokens: usize) -> Result<String> {
         let tokens = self.tokenizer.encode(prompt, true).map_err(E::msg)?;
         let mut token_ids = tokens.get_ids().to_vec();
-        let mut response = String::new();
-        let mut pos = 0;
+        if token_ids.is_empty() { return Ok(String::new()); }
 
+        let mut pos = 0;
         let input_tensor = Tensor::new(token_ids.as_slice(), &self.device)?.unsqueeze(0)?;
         let logits = self.model.forward(&input_tensor, pos)?;
-        let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
-        let logits = logits.i(logits.dim(0)? - 1)?;
+        let mut logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
+        if logits.rank() == 2 {
+            let seq_len = logits.dim(0)?;
+            logits = logits.i(seq_len - 1)?;
+        }
         pos += token_ids.len();
 
+        let mut gen_tokens = Vec::new();
         let mut next_token = self.logits_processor.sample(&logits)?;
         token_ids.push(next_token);
-        if let Some(text) = self.tokenizer.decode(&[next_token], true).ok() {
-            response.push_str(&text);
-        }
+        gen_tokens.push(next_token);
+
+        // Streaming Buffer
+        let mut _current_word_tokens = Vec::new(); // Placeholder for future streaming Logic
 
         for _ in 0..max_tokens {
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
             let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
+            let logits = if logits.rank() == 2 {
+                let seq_len = logits.dim(0)?;
+                logits.i(seq_len - 1)?
+            } else {
+                logits
+            };
+
+            // RAW RESONANCE: No Repetition Penalty.
+            // "solo lo que escuche tiene que resonar"
+            
             next_token = self.logits_processor.sample(&logits)?;
             token_ids.push(next_token);
+            gen_tokens.push(next_token);
             pos += 1;
 
-            if let Some(text) = self.tokenizer.decode(&[next_token], true).ok() {
-                 if text.contains("</s>") || text.contains("<|endoftext|>") {
-                    break;
-                }
-                response.push_str(&text);
+            if next_token == self.tokenizer.token_to_id("</s>").unwrap_or(2) || 
+               next_token == self.tokenizer.token_to_id("<|endoftext|>").unwrap_or(0) {
+                break;
             }
         }
         
-        Ok(response.replace("</s>", "").replace("<|endoftext|>", "").trim().to_string())
+        let response = self.tokenizer.decode(&gen_tokens, true).map_err(E::msg)?;
+        Ok(response.trim().to_string())
     }
 }

@@ -6,6 +6,7 @@ pub enum MindVoice {
     Cortex,  // [BROCA], [WERNICKE], [THINK] - Green
     Chem,    // [DOPA], [CORT] - Magenta
     System,  // [SYS], [SAVE] - DarkGray/Yellow
+    Vocal,   // [SPEAK] - White/Bold
 }
 
 #[derive(Debug, Clone)]

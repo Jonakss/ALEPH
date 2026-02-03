@@ -28,12 +28,12 @@ impl Neurotransmitters {
             self.adenosine -= 0.0005 * time_scale; 
         } else {
             // Base fatigue from just being awake
-            // Was 0.0001 -> Tuned to 0.00005 (Last longer)
-            let base_fatigue = 0.00005 * time_scale;
+            // Was 0.00005 -> Tuned to 0.000005 (Practically infinite stamina)
+            let base_fatigue = 0.000005 * time_scale;
             
             // Cognitive load from processing (high entropy = hard thinking)
-            // Was 0.0003 -> Tuned to 0.0001 (Thinking is cheaper)
-            let cognitive_load = entropy * 0.0001 * time_scale;
+            // Was 0.0001 -> Tuned to 0.00001 (Micro-dosing effort)
+            let cognitive_load = entropy * 0.00001 * time_scale;
             
             // Metabolic load from hardware stress
             let metabolic_load = (cpu_load / 100.0) * 0.0002 * time_scale;

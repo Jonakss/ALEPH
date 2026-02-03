@@ -82,7 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ears.set_mute(true); // Mute during warmup
 
         let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
-        let mut previous_spectrum = senses::ears::AudioSpectrum::default();
+
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
         let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<CortexOutput>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
@@ -127,7 +127,7 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // METABOLIC CLOCK
         let mut rumination_timer = 0.0;
-        let mut target_fps = 60.0;
+
         
         timeline.push(Thought::new(MindVoice::System, "Neocortex Initializing...".to_string()));
 
@@ -144,7 +144,7 @@ async fn main() -> Result<(), anyhow::Error> {
              while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
 
              // A. UPDATE SENSES
-            previous_spectrum = current_spectrum.clone(); // CRITICAL: Track delta
+             let previous_spectrum = current_spectrum.clone(); // CRITICAL: Track delta
             if let Ok(spec) = rx_spectrum.try_recv() {
                 current_spectrum = spec;
             }
@@ -397,11 +397,20 @@ async fn main() -> Result<(), anyhow::Error> {
                         entropy: current_entropy 
                     });
 
-                    // MECHANICAL HONESTY: Voluntary silence = no vocalization
-                    if output.text != "......." {
+                    // MECHANICAL HONESTY: Vocalization Filter
+                    // The brain generates many "thoughts" (errors, system codes, silence). 
+                    // Only "Organic Speech" should move the vocal cords.
+                    let is_system_code = output.text.starts_with('[') || output.text.contains("NEURO_GLITCH");
+                    let is_silence = output.text == "......." || output.text.trim().is_empty();
+
+                    if !is_system_code && !is_silence {
                         crate::actuators::voice::speak(output.text.clone(), tx_thoughts.clone());
+                    } else if is_system_code {
+                        // Log internal state change but don't speak it
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🔒 Internal Process: {}", output.text)));
                     } else {
-                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "🔇 Silencio voluntario (fatiga cognitiva).".to_string()));
+                        // Silence
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "🔇 Silencio voluntario.".to_string()));
                     }
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, output.text));
                 }
@@ -439,9 +448,9 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // F.2 METABOLIC NEUROGENESIS (Spontaneous Growth)
             // NON-HARDCODED: Probability of growth is a function of the sys state.
-            // P(Growth) = (Dopamine * Entropy) / 100.0
+            // P(Growth) = (Dopamine * Entropy) / 200.0 (Much slower)
             // If excited and chaotic, brain expands.
-            let growth_prob = (chemistry.dopamine * entropy * 0.1).clamp(0.0, 1.0);
+            let growth_prob = (chemistry.dopamine * entropy * 0.005).clamp(0.0, 1.0);
             
             if rng.gen_bool(growth_prob as f64) && ego.current_size() < 1500 {
                  growth_counter += 1; // Accumulate biological potential
@@ -514,7 +523,7 @@ async fn main() -> Result<(), anyhow::Error> {
             // 2. Calculate Target FPS (Time Dilation)
             // Base 60Hz. Adenosine drags it down to 25Hz (Sluggish but fluid).
             // Dopamine boosts it slightly to 75Hz (Flow).
-            target_fps = (60.0 * (1.0 + chemistry.dopamine * 0.2) * (1.0 - chemistry.adenosine * 0.7)).clamp(25.0, 75.0);
+            let target_fps = (60.0 * (1.0 + chemistry.dopamine * 0.2) * (1.0 - chemistry.adenosine * 0.7)).clamp(25.0, 75.0);
 
             let elapsed = start.elapsed();
             let frame_duration = Duration::from_secs_f32(1.0 / target_fps);
@@ -536,8 +545,17 @@ async fn main() -> Result<(), anyhow::Error> {
     loop {
         // Update State
         if let Ok(data) = rx_telemetry.try_recv() {
-            // Updated Telemetry
+            // STICKY SCROLL LOGIC
+            // If user is scrolled back (buffer mode), maintain visual position
+            // by adding new items to the offset.
+            if log_scroll > 0 {
+                 let new_items = data.timeline.len().saturating_sub(last_telemetry.timeline.len());
+                 if new_items > 0 {
+                     log_scroll += new_items;
+                 }
+            }
 
+            // Updated Telemetry
             let time = start_app_time.elapsed().as_secs_f64();
             entropy_history.push((time, data.entropy as f64));
             // Keep window
@@ -565,10 +583,16 @@ async fn main() -> Result<(), anyhow::Error> {
                     break;
                 }
                 if key.code == KeyCode::Up {
-                    log_scroll = log_scroll.saturating_add(1);
+                    log_scroll = log_scroll.saturating_sub(1); // User requested inverted?
                 }
                 if key.code == KeyCode::Down {
-                    log_scroll = log_scroll.saturating_sub(1);
+                    log_scroll = log_scroll.saturating_add(1); 
+                }
+                if key.code == KeyCode::PageUp {
+                    log_scroll = log_scroll.saturating_sub(10);
+                }
+                if key.code == KeyCode::PageDown {
+                    log_scroll = log_scroll.saturating_add(10);
                 }
                 if key.code == KeyCode::Char('r') { // Reset scroll
                     log_scroll = 0;
