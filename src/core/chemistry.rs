@@ -24,7 +24,8 @@ impl Neurotransmitters {
         // 1. ADENOSINA (Fatiga/Presión de Sueño)
         if is_dreaming {
             // Dormir limpia la fatiga - recuperación REAL
-            self.adenosine -= 0.05 * time_scale; // 5x faster recovery
+            // Was 0.05 (too fast). Now 0.0005 -> ~30s to recover full bar at 60Hz
+            self.adenosine -= 0.0005 * time_scale; 
         } else {
             // Base fatigue from just being awake
             let base_fatigue = 0.0001 * time_scale;

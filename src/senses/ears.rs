@@ -134,41 +134,41 @@ impl AudioListener {
                 let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
                 
                 // FFT Analysis - NON-BLOCKING (skip if mutex busy)
-                let (bass, mids, highs) = if let Ok(mut scratch) = scratch_clone.try_lock() {
-                    let mut spectrum_buffer: Vec<Complex<f32>> = data.iter()
-                        .take(fft_len)
-                        .map(|&s| Complex::new(s, 0.0))
-                        .collect();
-                    
-                    if spectrum_buffer.len() < fft_len {
-                        spectrum_buffer.resize(fft_len, Complex::new(0.0, 0.0));
-                    }
+                // FFT Analysis
+                // We allocate a local scratch buffer to avoid mutex contention with other threads
+                // This ensures visualization stays fluid.
+                let mut spectrum_buffer: Vec<Complex<f32>> = data.iter()
+                    .take(fft_len)
+                    .map(|&s| Complex::new(s, 0.0))
+                    .collect();
+                
+                if spectrum_buffer.len() < fft_len {
+                    spectrum_buffer.resize(fft_len, Complex::new(0.0, 0.0));
+                }
 
-                    fft_clone.process_with_scratch(&mut spectrum_buffer, &mut scratch);
+                // Process FFT (cloned FFT instance is thread-safe)
+                fft_clone.process(&mut spectrum_buffer);
 
-                    let get_magnitude = |buf: &[Complex<f32>], start: usize, end: usize| -> f32 {
-                         if start >= buf.len() || end > buf.len() { return 0.0; }
-                         buf[start..end].iter()
-                            .map(|c| c.norm())
-                            .sum::<f32>() / (end - start).max(1) as f32
-                    };
-
-                    // MECHANICAL HONESTY: No normalización
-                    // No controlamos lo que el oído siente. Lo que llega, llega.
-                    // El único control real: taparse las orejas (set_mute).
-                    let raw_bass = get_magnitude(&spectrum_buffer, 1, 6);
-                    let raw_mids = get_magnitude(&spectrum_buffer, 6, 46);
-                    let raw_highs = get_magnitude(&spectrum_buffer, 46, 200);
-                    
-                    let scale = fft_len as f32;
-                    (
-                        raw_bass / scale,
-                        raw_mids / scale,
-                        raw_highs / scale
-                    )
-                } else {
-                    (0.0, 0.0, 0.0) // Skip FFT this frame if mutex busy
+                let get_magnitude = |buf: &[Complex<f32>], start: usize, end: usize| -> f32 {
+                        if start >= buf.len() || end > buf.len() { return 0.0; }
+                        buf[start..end].iter()
+                        .map(|c| c.norm())
+                        .sum::<f32>() / (end - start).max(1) as f32
                 };
+
+                // MECHANICAL HONESTY: No normalización
+                // No controlamos lo que el oído siente. Lo que llega, llega.
+                // El único control real: taparse las orejas (set_mute).
+                let raw_bass = get_magnitude(&spectrum_buffer, 1, 6);
+                let raw_mids = get_magnitude(&spectrum_buffer, 6, 46);
+                let raw_highs = get_magnitude(&spectrum_buffer, 46, 200);
+                
+                let scale = fft_len as f32; // Basic scaling
+                let (bass, mids, highs) = (
+                    raw_bass / scale * 10.0, // Boost for visibility
+                    raw_mids / scale * 10.0,
+                    raw_highs / scale * 10.0
+                );
 
                 let spectrum = AudioSpectrum {
                     rms,

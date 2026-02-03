@@ -21,6 +21,9 @@ pub struct CortexInput {
     pub cpu_load: f32,    // 0.0 - 100.0
     pub ram_pressure: f32, // 0.0 - 1.0
     pub cognitive_impairment: f32, // 0.0 - 1.0 (Brain fog)
+    // BIOLOGICAL DRIVERS (MECHANICAL HONESTY)
+    pub entropy: f32,      // 0.0 - 1.0+ (Chaos/Temperature)
+    pub adenosine: f32,    // 0.0 - 1.0 (Fatigue/Top-P constriction)
 }
 
 // Response with metabolic data
@@ -55,33 +58,42 @@ impl CognitiveCore {
                     
                     // 2. Event Loop (Consciencia Hub)
                     while let Ok(msg) = input_rx.recv() {
-                         // MECHANICAL HONESTY: Hardware modulates hyperparameters
-                         let temp_modifier: f64 = if msg.cpu_load > 80.0 { 0.3 } else { 0.0 }; // High CPU = irritable
-                         let top_p_modifier: f64 = if msg.ram_pressure > 0.9 { -0.2 } else { 0.0 }; // High RAM = foggy
-                         
-                         let effective_temp: f64 = (0.7_f64 + temp_modifier).clamp(0.1, 1.5);
-                         let effective_top_p: f64 = (0.9_f64 + top_p_modifier).clamp(0.5, 1.0);
-                         
+                         // MECHANICAL HONESTY: Hyperparameters tied to Biological State
+                         // 1. Entropy -> Temperature (Chaos drives creativity/instability)
+                         // Base temp 0.7. Entropy > 0.8 spikes temp to > 1.2
+                         let effective_temp: f64 = (0.6 + msg.entropy.powf(2.0)) as f64;
+                         let effective_temp = effective_temp.clamp(0.1, 2.5);
+
+                         // 2. Adenosine -> Top-P (Fatigue constricts possibility space / Mental Tunneling)
+                         // Base Top-P 0.9. Adenosine > 0.8 drops Top-P to < 0.5 (Repetitive/Locked)
+                         let effective_top_p: f64 = (0.95 - (msg.adenosine * 0.8)) as f64;
+                         let effective_top_p = effective_top_p.clamp(0.05, 0.99);
+
                          core.logits_processor = LogitsProcessor::new(
                              rand::thread_rng().gen(),
                              Some(effective_temp),
                              Some(effective_top_p)
                          );
                          
-                         if temp_modifier > 0.0 || top_p_modifier < 0.0 {
+                         // Log significant shifts
+                         if msg.entropy > 0.8 || msg.adenosine > 0.7 {
                              let _ = thread_thought_tx.send(Thought::new(MindVoice::Chem, 
-                                 format!("🧪 Parametric shift: T={:.1} P={:.1}", effective_temp, effective_top_p)));
+                                 format!("🧪 Bio-Modulation: T={:.2} (Chaos), P={:.2} (Focus)", effective_temp, effective_top_p)));
                          }
                          
                          // Measure inference latency (REAL METABOLISM)
                          let start = std::time::Instant::now();
                          
-                         // MECHANICAL HONESTY: Brain fog / Refusal
-                         let response = if msg.cognitive_impairment > 0.8 && rand::thread_rng().gen::<f32>() < msg.cognitive_impairment {
+                         // MECHANICAL HONESTY: Physical Collapse
+                         // If Adenosine is critical AND System is Chaotic = Shutdown
+                         let response = if msg.adenosine > 0.95 {
+                             "[SYSTEM_FAILURE]: Consciousness collapsed. Adenosine critical.".to_string()
+                         } else if msg.cognitive_impairment > 0.8 && rand::thread_rng().gen::<f32>() < msg.cognitive_impairment {
                              ".......".to_string() // Active Silence (Freeze)
                          } else {
-                             let max_tokens = (300.0 * (1.0 - msg.cognitive_impairment * 0.7)) as usize;
-                             core.think_with_limit(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref(), max_tokens)
+                             // Context Window constriction due to fatigue
+                             let available_tokens = if msg.adenosine > 0.6 { 150 } else { 300 };
+                             core.think_with_limit(&msg.text, &msg.bio_state, &msg.somatic_state, msg.long_term_memory.as_deref(), available_tokens)
                          };
                          
                          let latency_ms = start.elapsed().as_millis() as u64;

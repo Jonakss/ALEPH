@@ -107,6 +107,7 @@ async fn main() -> Result<(), anyhow::Error> {
         // let mut last_save_secs: u64 = 0; // REMOVED: Mechanical Honesty (Persistence only on Sleep)
         let mut growth_counter = 0; // Robust neurogenesis counter
         let mut observer_logs: Vec<String> = Vec::new(); // Persistent logs for TUI
+        let mut hippocampus_total_memories = 0; // MECHANICAL HONESTY: True weight of memory
         
         observer_logs.push("Neocortex Initializing...".to_string());
 
@@ -241,6 +242,7 @@ async fn main() -> Result<(), anyhow::Error> {
             while let Ok(mem_out) = rx_mem.try_recv() {
                 // 1. Update Stats
                 current_novelty = mem_out.novelty;
+                hippocampus_total_memories = mem_out.total_count;
                 
                 // 2. Neurochemistry Reaction
                 if mem_out.novelty > 0.85 {
@@ -288,6 +290,9 @@ async fn main() -> Result<(), anyhow::Error> {
                         cpu_load: last_body_state.cpu_usage,
                         ram_pressure: last_body_state.ram_usage,
                         cognitive_impairment,
+                        // DIRECT BIOLOGICAL FEEDBACK
+                        entropy: current_entropy,
+                        adenosine: chemistry.adenosine,
                     };
                     let _ = tx.send(input);
                 } else {
@@ -374,7 +379,7 @@ async fn main() -> Result<(), anyhow::Error> {
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,
                   last_entropy_delta: 0.0,
-                  neuron_active_count: ego.current_size(), // Just structural count now
+                  neuron_active_count: hippocampus_total_memories, // MECHANICAL HONESTY: Vectors are the neurons
                   insight_intensity: current_insight, 
                   activity_map: ego.get_activity_snapshot(),
                   novelty_score: current_novelty,

@@ -3,6 +3,7 @@ use std::thread;
 use std::time::Duration;
 use crate::core::thought::{Thought, MindVoice};
 use crate::core::llm::CortexInput;
+use rand::Rng;
 
 /// Inner Voice - Silent rumination thread
 /// Every ~30 seconds, takes the last thought and reflects on it internally.
@@ -22,26 +23,20 @@ pub fn spawn_inner_voice(
         loop {
             thread::sleep(Duration::from_secs(30));
             
-            // Generate a random internal prompt for self-reflection
-            let prompts = [
-                "¿Qué estoy pensando ahora mismo?",
-                "¿Cómo me siento en este momento?",
-                "¿Qué es lo más interesante que recuerdo?",
-                "¿Hay algo que debería procesar internamente?",
-                "Reflexión silenciosa sobre mi existencia...",
-            ];
+            // MECHANICAL HONESTY: Rumination seed based on Entropy & Random Chaos
+            // Instead of hardcoded prompts, we use the randomness of the moment
+            let entropy_seed: u8 = rand::thread_rng().gen();
             
-            let idx = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as usize % prompts.len();
-            
-            let prompt = prompts[idx];
-            
-            // Avoid repeating the same rumination
-            if prompt == last_rumination {
-                continue;
-            }
+            let prompt = match entropy_seed % 5 {
+                0 => "Analizar mi estado interno actual.",
+                1 => "Revisar la coherencia de mis pensamientos recientes.",
+                2 => "¿Hay discordancia entre mi biología y mis objetivos?",
+                3 => "Explorar el concepto de 'Yo' en este ciclo.",
+                _ => "Silencio introspectivo...",
+            };
+
+            // Avoid repeating (simple check)
+            if prompt == last_rumination { continue; }
             last_rumination = prompt.to_string();
             
             // Send to Cortex for internal processing
@@ -54,6 +49,9 @@ pub fn spawn_inner_voice(
                 cpu_load: 10.0,
                 ram_pressure: 0.3,
                 cognitive_impairment: 0.0,
+                // Inner rumination assumes baseline stats, actual modification happens in Cortex
+                entropy: 0.5, 
+                adenosine: 0.3,
             };
             
             let _ = tx_cortex.send(input);
