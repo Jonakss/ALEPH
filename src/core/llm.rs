@@ -69,15 +69,24 @@ impl CognitiveCore {
                         };
 
                          // MECHANICAL HONESTY: Hyperparameters tied to Biological State
-                         // 1. Entropy -> Temperature (Chaos drives creativity/instability)
-                         // Base temp 0.7. Entropy > 0.8 spikes temp to > 1.2
-                         let effective_temp: f64 = (0.6 + msg.entropy.powf(2.0)) as f64;
-                         let effective_temp = effective_temp.clamp(0.5, 1.5); // Narrower range to avoid instability
+                         
+                         // 0. Sanitize Inputs (Prevent Math Panics)
+                         let safe_entropy = if msg.entropy.is_nan() || msg.entropy.is_infinite() { 
+                             0.5 
+                         } else { 
+                             msg.entropy 
+                         };
 
-                         // 2. Adenosine -> Top-P (Fatigue constricts possibility space / Mental Tunneling)
-                         // Base Top-P 0.9. Adenosine > 0.8 drops Top-P to < 0.5 (Repetitive/Locked)
-                         let effective_top_p: f64 = (0.95 - (msg.adenosine * 0.8)) as f64;
-                         let effective_top_p = effective_top_p.clamp(0.1, 0.95);
+                         // 1. Entropy -> Temperature
+                         // CRITICAL: Clamp strictly to avoid overflow in softmax exp()
+                         // Range: 0.7 (Stable) - 1.2 (Creative). Never < 0.1 or > 2.0.
+                         let effective_temp: f64 = (0.7 + safe_entropy * 0.5) as f64;
+                         let effective_temp = effective_temp.clamp(0.7, 1.2); 
+
+                         // 2. Adenosine -> Top-P
+                         // Range: 0.9 (Open) - 0.5 (Focused). Never < 0.1.
+                         let effective_top_p: f64 = (0.95 - (msg.adenosine * 0.4)) as f64;
+                         let effective_top_p = effective_top_p.clamp(0.5, 0.98);
 
                          core.logits_processor = LogitsProcessor::new(
                              rand::thread_rng().gen(),

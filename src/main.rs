@@ -49,7 +49,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let _ = std::fs::write("crash.log", log);
     }));
 
-    // let _stderr_gag = Gag::stderr().unwrap(); // COMMENTED OUT FOR DEBUGGING CRASHES
+    let _stderr_gag = Gag::stderr().unwrap(); // Silence library noise (Whisper/ALSA)
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -254,8 +254,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 // Attention is not binary. It's a probability function of energy (adenosine) and interest (dopamine).
                 
                 // 1. Calculate Attention Score (0.0 to 1.0)
-                // Base 0.5. Dopamine boosts to 1.0. Adenosine penalizes to 0.0.
-                let attention_score = (0.5 + (chemistry.dopamine * 0.5) - (chemistry.adenosine * 0.8)).clamp(0.0, 1.0);
+                // Base 0.65. Dopamine boosts to 1.0. Adenosine penalizes to 0.0.
+                let attention_score = (0.65 + (chemistry.dopamine * 0.5) - (chemistry.adenosine * 0.8)).clamp(0.0, 1.0);
                 
                 // 2. Determine Fate of Input
                 // MECHANICAL HONESTY: Entropic Gating

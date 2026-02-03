@@ -28,16 +28,20 @@ impl Neurotransmitters {
             self.adenosine -= 0.0005 * time_scale; 
         } else {
             // Base fatigue from just being awake
-            let base_fatigue = 0.0001 * time_scale;
+            // Was 0.0001 -> Tuned to 0.00005 (Last longer)
+            let base_fatigue = 0.00005 * time_scale;
             
             // Cognitive load from processing (high entropy = hard thinking)
-            let cognitive_load = entropy * 0.0003 * time_scale;
+            // Was 0.0003 -> Tuned to 0.0001 (Thinking is cheaper)
+            let cognitive_load = entropy * 0.0001 * time_scale;
             
             // Metabolic load from hardware stress
             let metabolic_load = (cpu_load / 100.0) * 0.0002 * time_scale;
             
-            // Resilience: More neurons = slightly better endurance
-            let resilience = (current_neurons as f32 / 150.0).clamp(0.5, 2.0);
+            // Resilience: More neurons = better endurance
+            // Base divisor: 500.0 (At 500 neurons, resilience is 1.0)
+            // Cap raised to 5.0 (5x endurance for huge brains)
+            let resilience = (current_neurons as f32 / 500.0).clamp(0.5, 5.0);
             
             // Total load
             let total_load = (base_fatigue + cognitive_load + metabolic_load) / resilience;

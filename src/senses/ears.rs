@@ -35,7 +35,7 @@ impl AudioListener {
         
         let state = Arc::new(Mutex::new(ctx));
         let is_muted = Arc::new(Mutex::new(true)); 
-        let attention_threshold = Arc::new(Mutex::new(0.005)); 
+        let attention_threshold = Arc::new(Mutex::new(0.002)); // More sensitive (was 0.005)
 
         // 2. Setup Audio Input
         let host = cpal::default_host();
