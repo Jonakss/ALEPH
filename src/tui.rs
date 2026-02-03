@@ -32,6 +32,8 @@ pub struct Telemetry {
     pub cortisol: f32,  // Stress
     pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
     pub thoughts: Vec<Thought>, // Stream of Consciousness
+    pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
+    pub novelty_score: f32, // Last novelty check result
 }
 
 impl Default for Telemetry {
@@ -51,6 +53,8 @@ impl Default for Telemetry {
             cortisol: 0.0,
             insight_intensity: 0.0,
             thoughts: Vec::new(),
+            activity_map: vec![0.0; 100],
+            novelty_score: 0.0,
         }
     }
 }
@@ -98,31 +102,49 @@ pub fn ui(
         .title(" 👂 ACOUSTIC SPECTRUM ")
         .borders(Borders::ALL);
 
-    // Prepare Data for Histogram
+    // Prepare Data for Gradient Bars
     let spectrum = &telemetry.audio_spectrum;
     
-    // Scale values for display (boost visual impact)
-    // Adjusted gains after user feedback (Bass was clipping)
-    let val_bass = (spectrum.bass * 150.0).clamp(0.0, 100.0) as u64; 
-    let val_mids = (spectrum.mids * 200.0).clamp(0.0, 100.0) as u64;
-    let val_highs = (spectrum.highs * 300.0).clamp(0.0, 100.0) as u64;
+    // Normalize values 0.0 - 1.0 (FFT already normalized in ears.rs)
+    let val_bass = spectrum.bass.clamp(0.0, 1.0);
+    let val_mids = spectrum.mids.clamp(0.0, 1.0);
+    let val_highs = spectrum.highs.clamp(0.0, 1.0);
+    let val_rms = (spectrum.rms * 10.0).clamp(0.0, 1.0); // RMS is typically 0.0-0.1
 
-    let bars = vec![
-        ("BASS", val_bass),
-        ("MIDS", val_mids),
-        ("HIGH", val_highs),
-        ("RMS", (spectrum.rms * 100.0) as u64),
+    // Generate gradient bar with color intensity
+    let make_bar = |value: f32, label: &str| -> Line {
+        let bar_width = 12;
+        let filled = (value * bar_width as f32) as usize;
+        
+        let color = if value < 0.33 {
+            Color::Cyan
+        } else if value < 0.66 {
+            Color::Yellow
+        } else {
+            Color::Red
+        };
+        
+        let bar: String = "█".repeat(filled) + &"░".repeat(bar_width - filled);
+        
+        Line::from(vec![
+            Span::styled(format!("{:4} ", label), Style::default().fg(Color::White)),
+            Span::styled(bar, Style::default().fg(color)),
+            Span::styled(format!(" {:3.0}%", value * 100.0), Style::default().fg(Color::DarkGray)),
+        ])
+    };
+
+    let audio_lines = vec![
+        make_bar(val_bass, "BASS"),
+        make_bar(val_mids, "MIDS"),
+        make_bar(val_highs, "HIGH"),
+        make_bar(val_rms, " RMS"),
     ];
 
-    let barchart = ratatui::widgets::BarChart::default()
+    let audio_paragraph = Paragraph::new(audio_lines)
         .block(audio_block)
-        .data(&bars)
-        .bar_width(5)
-        .bar_gap(2)
-        .value_style(Style::default().fg(Color::Black).bg(Color::Cyan))
-        .style(Style::default().fg(Color::Cyan));
+        .alignment(ratatui::layout::Alignment::Left);
         
-    f.render_widget(barchart, top_chunks[0]);
+    f.render_widget(audio_paragraph, top_chunks[0]);
 
     // --- PANEL CENTER: RESERVOIR STATE ---
     let reservoir_block = Block::default()
@@ -216,7 +238,7 @@ pub fn ui(
         Span::styled(s, Style::default().fg(color))
     };
 
-    let text = vec![
+    let mut text = vec![
         Line::from(vec![Span::raw("System Status: "), Span::styled(telemetry.system_status.clone(), status_style)]),
         Line::from(vec![Span::raw(format!("Tick Rate: {:.1} Hz", telemetry.fps))]),
         Line::from(vec![Span::raw(format!("Brain Size: {} neurons", telemetry.neuron_active_count))]),
@@ -239,6 +261,12 @@ pub fn ui(
         ]),
         Line::from(""),
         Line::from(vec![
+            Span::raw("NOVELTY:  "),
+            make_bar(1.0 - telemetry.novelty_score, Color::Yellow), // Inverse: low sim = novel
+            Span::raw(format!(" {:.0}% (Surprise)", (1.0 - telemetry.novelty_score) * 100.0)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
             Span::raw("CPU Load: "),
             make_bar(telemetry.cpu_load / 100.0, if telemetry.cpu_load > 80.0 { Color::Red } else { Color::Green }),
             Span::raw(format!(" {:.1}%", telemetry.cpu_load)),
@@ -248,7 +276,22 @@ pub fn ui(
             make_bar(telemetry.ram_load, if telemetry.ram_load > 0.9 { Color::Red } else { Color::Green }),
             Span::raw(format!(" {:.1}%", telemetry.ram_load * 100.0)),
         ]),
+        Line::from(""),
+        Line::from(vec![Span::styled("--- NEURAL ACTIVITY (10x10) ---", Style::default().add_modifier(Modifier::BOLD))]),
     ];
+    
+    // Build 10x10 heatmap from activity_map (100 neurons)
+    for row in 0..10 {
+        let mut spans: Vec<Span> = Vec::new();
+        for col in 0..10 {
+            let idx = row * 10 + col;
+            let val = telemetry.activity_map.get(idx).copied().unwrap_or(0.0);
+            let block = if val < 0.25 { "░" } else if val < 0.5 { "▒" } else if val < 0.75 { "▓" } else { "█" };
+            let color = if val < 0.33 { Color::DarkGray } else if val < 0.66 { Color::Cyan } else { Color::Yellow };
+            spans.push(Span::styled(block, Style::default().fg(color)));
+        }
+        text.push(Line::from(spans));
+    }
     let stats = Paragraph::new(text)
         .block(Block::default().title(" Telemetry ").borders(Borders::ALL))
         .wrap(Wrap { trim: true });

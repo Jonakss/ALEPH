@@ -46,13 +46,68 @@ impl AudioListener {
         let fft = planner.plan_fft_forward(fft_len);
         let fft_scratch_len = fft.get_inplace_scratch_len();
         let fft_scratch = Arc::new(Mutex::new(vec![Complex::new(0.0, 0.0); fft_scratch_len]));
-        let fft_arc = Arc::new(fft); // FFT instance is Sync? Fft is trait object usually. Fft is Arc<dyn Fft>.
+        let fft_arc = Arc::new(fft); 
 
         let audio_buffer = Arc::new(Mutex::new(Vec::new()));
         let is_recording = Arc::new(Mutex::new(false));
         let silence_frames = Arc::new(Mutex::new(0));
 
-        let state_clone = state.clone();
+        // WORKER THREAD SETUP
+        let (audio_work_tx, audio_work_rx) = std::sync::mpsc::channel::<Vec<f32>>();
+        let worker_state = state.clone();
+        let worker_ears_tx = ears_tx.clone();
+        let worker_thought_tx = thought_tx.clone();
+
+        std::thread::spawn(move || {
+             while let Ok(samples) = audio_work_rx.recv() {
+                  let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+                  params.set_language(Some("es"));
+                  params.set_print_special(false);
+                  params.set_print_progress(false);
+                  params.set_print_realtime(false);
+                  params.set_print_timestamps(false);
+                  
+                  // Downsample (Simple decimation)
+                  let resampled: Vec<f32> = samples.iter().step_by(3).cloned().collect(); 
+
+                  // Gag output
+                  let _print_gag = gag::Gag::stdout().ok();
+                  let _err_gag = gag::Gag::stderr().ok();
+
+                  let mut state = worker_state.lock().unwrap();
+                  if let Ok(mut state_session) = state.create_state() {
+                        if let Ok(_) = state_session.full(params, &resampled[..]) {
+                            // Release gags
+                            drop(_print_gag); 
+                            drop(_err_gag);
+
+                            let num_segments = state_session.full_n_segments().unwrap();
+                            let mut text = String::new();
+                            for i in 0..num_segments {
+                                if let Ok(segment) = state_session.full_get_segment_text(i) {
+                                    text.push_str(&segment);
+                                }
+                            }
+                            text = text.trim().to_string();
+                            
+                            let triggers = [
+                                "[BLANK_AUDIO]", "música", "Subtítulos", "Amara.org", 
+                                "...", "??", "Music", "music"
+                            ];
+                            
+                            let is_hallucination = text.len() < 2 
+                                || triggers.iter().any(|&t| text.contains(t) || text.to_lowercase().contains(&t.to_lowercase()));
+
+                            if !text.is_empty() && !is_hallucination {
+                                let _ = worker_thought_tx.send(Thought::new(MindVoice::Cortex, format!("Heard: '{}'", text)));
+                                let _ = worker_ears_tx.send(text);
+                            }
+                        }
+                  }
+             }
+        });
+
+        // Callback Clones
         let buffer_clone = audio_buffer.clone();
         let recording_limit = is_recording.clone();
         let silence_counter = silence_frames.clone();
@@ -61,45 +116,42 @@ impl AudioListener {
         let fft_clone = fft_arc.clone();
         let scratch_clone = fft_scratch.clone();
         
-        let thought_tx_stream = thought_tx.clone();
-        let thought_tx_err = thought_tx.clone();
-        
         let stream = device.build_input_stream(
             &config.into(),
             move |data: &[f32], _: &_| {
                 // A. Check Metrics (RMS) & FFT
                 let rms = (data.iter().map(|s| s * s).sum::<f32>() / data.len() as f32).sqrt();
                 
-                // FFT Analysis (Zero-Pad to 1024)
-                let mut spectrum_buffer: Vec<Complex<f32>> = data.iter()
-                    .take(fft_len)
-                    .map(|&s| Complex::new(s, 0.0))
-                    .collect();
-                
-                if spectrum_buffer.len() < fft_len {
-                    spectrum_buffer.resize(fft_len, Complex::new(0.0, 0.0));
-                }
+                // FFT Analysis - NON-BLOCKING (skip if mutex busy)
+                let (bass, mids, highs) = if let Ok(mut scratch) = scratch_clone.try_lock() {
+                    let mut spectrum_buffer: Vec<Complex<f32>> = data.iter()
+                        .take(fft_len)
+                        .map(|&s| Complex::new(s, 0.0))
+                        .collect();
+                    
+                    if spectrum_buffer.len() < fft_len {
+                        spectrum_buffer.resize(fft_len, Complex::new(0.0, 0.0));
+                    }
 
-                if let Ok(mut scratch) = scratch_clone.lock() {
-                     fft_clone.process_with_scratch(&mut spectrum_buffer, &mut scratch);
-                }
+                    fft_clone.process_with_scratch(&mut spectrum_buffer, &mut scratch);
 
-                // Analyze Buckets
-                // Sample Rate ~44-48k. N=1024. Bin Width ~45 Hz.
-                // Bass (20-250): Bins 1..6
-                // Mids (250-2000): Bins 6..46
-                // Highs (2000+): Bins 46..200
-                
-                let get_magnitude = |buf: &[Complex<f32>], start: usize, end: usize| -> f32 {
-                     if start >= buf.len() || end > buf.len() { return 0.0; }
-                     buf[start..end].iter()
-                        .map(|c| c.norm())
-                        .sum::<f32>() / (end - start).max(1) as f32
+                    let get_magnitude = |buf: &[Complex<f32>], start: usize, end: usize| -> f32 {
+                         if start >= buf.len() || end > buf.len() { return 0.0; }
+                         buf[start..end].iter()
+                            .map(|c| c.norm())
+                            .sum::<f32>() / (end - start).max(1) as f32
+                    };
+
+                    // Normalize by FFT length and apply sensible scaling
+                    let fft_norm = 1024.0; // FFT length normalizer
+                    (
+                        (get_magnitude(&spectrum_buffer, 1, 6) / fft_norm).clamp(0.0, 1.0),
+                        (get_magnitude(&spectrum_buffer, 6, 46) / fft_norm).clamp(0.0, 1.0),
+                        (get_magnitude(&spectrum_buffer, 46, 200) / fft_norm).clamp(0.0, 1.0)
+                    )
+                } else {
+                    (0.0, 0.0, 0.0) // Skip FFT this frame if mutex busy
                 };
-
-                let bass = get_magnitude(&spectrum_buffer, 1, 6) * 1.0; // Reduced Gain
-                let mids = get_magnitude(&spectrum_buffer, 6, 46) * 1.5;
-                let highs = get_magnitude(&spectrum_buffer, 46, 200);
 
                 let spectrum = AudioSpectrum {
                     rms,
@@ -111,15 +163,16 @@ impl AudioListener {
 
                 let _ = spectrum_tx.send(spectrum);
 
-                // B. Gating Logic
-                let threshold = *threshold_clone.lock().unwrap();
-                let muted = *muted_clone.lock().unwrap();
+                // B. Gating Logic - NON-BLOCKING
+                let threshold = threshold_clone.try_lock().map(|t| *t).unwrap_or(0.005);
+                let muted = muted_clone.try_lock().map(|m| *m).unwrap_or(true);
 
                 if muted { return; }
 
-                let mut recording = recording_limit.lock().unwrap();
-                let mut buffer = buffer_clone.lock().unwrap();
-                let mut silence = silence_counter.lock().unwrap();
+                // C. Recording State - NON-BLOCKING (skip frame if busy)
+                let Ok(mut recording) = recording_limit.try_lock() else { return; };
+                let Ok(mut buffer) = buffer_clone.try_lock() else { return; };
+                let Ok(mut silence) = silence_counter.try_lock() else { return; };
 
                 if rms > threshold {
                     if !*recording {
@@ -131,67 +184,21 @@ impl AudioListener {
                     *silence += 1;
                 }
 
-                // C. Recording
+                // D. Recording
                 if *recording {
                     buffer.extend_from_slice(data);
                     
-                    if *silence > 50 { 
+                    if *silence > 30 { // 30 frames ~ 0.5s silence
                         *recording = false;
                         
-                        // D. Process with Whisper
+                        // E. Send to Worker
                         let samples = buffer.clone();
-                        let ctx_mutex = state_clone.clone();
-                        let ears_tx_thread = ears_tx.clone();
-                        let thought_tx_thread = thought_tx_stream.clone(); 
-
-                        std::thread::spawn(move || {
-                            let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-                            params.set_language(Some("es"));
-                            params.set_print_special(false);
-                            params.set_print_progress(false);
-                            params.set_print_realtime(false);
-                            params.set_print_timestamps(false);
-                            
-                            let resampled: Vec<f32> = samples.iter().step_by(3).cloned().collect(); 
-
-                            let _print_gag = gag::Gag::stdout().ok();
-                            let _err_gag = gag::Gag::stderr().ok();
-
-                            let mut state = ctx_mutex.lock().unwrap();
-                            if let Ok(mut state_session) = state.create_state() {
-                                if let Ok(_) = state_session.full(params, &resampled[..]) {
-                                    drop(_print_gag); 
-                                    drop(_err_gag);
-
-                                    let num_segments = state_session.full_n_segments().unwrap();
-                                    let mut text = String::new();
-                                    for i in 0..num_segments {
-                                        if let Ok(segment) = state_session.full_get_segment_text(i) {
-                                            text.push_str(&segment);
-                                        }
-                                    }
-                                    text = text.trim().to_string();
-                                    
-                                    let triggers = [
-                                        "[BLANK_AUDIO]", "música", "Subtítulos", "Amara.org", 
-                                        "...", "??", "Music", "music"
-                                    ];
-                                    
-                                    let is_hallucination = text.len() < 2 
-                                        || triggers.iter().any(|&t| text.contains(t) || text.to_lowercase().contains(&t.to_lowercase()));
-
-                                    if !text.is_empty() && !is_hallucination {
-                                        let _ = thought_tx_thread.send(Thought::new(MindVoice::Cortex, format!("Concept recognized: '{}'", text)));
-                                        let _ = ears_tx_thread.send(text);
-                                    }
-                                }
-                            }
-                        });
+                        let _ = audio_work_tx.send(samples); // Non-blocking send
                         buffer.clear();
                     }
                 }
             },
-            move |err| { let _ = thought_tx_err.send(Thought::new(MindVoice::System, format!("Audio Input Error: {}", err))); },
+            move |err| { eprintln!("Audio Input Error: {}", err); },
             None,
         )?;
         

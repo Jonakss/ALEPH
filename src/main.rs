@@ -72,6 +72,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 (None, None)
             }
         };
+        
+        // 4.5 Inner Voice (Silent Rumination Thread)
+        if let Some(ref tx) = tx_cortex {
+            core::inner_voice::spawn_inner_voice(tx.clone(), tx_thoughts.clone());
+        }
 
         // 5. Otros Sentidos
         let (tx_body, rx_body) = mpsc::channel::<senses::proprioception::BodyStatus>();
@@ -90,6 +95,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut rng = rand::thread_rng();
         let mut current_entropy = 0.0; // Track entropy for memory tagging
         let mut current_insight = 0.0; // Track max relevance for visual flash
+        let mut current_novelty: f32 = 0.0; // Track last novelty score for TUI
 
         // Loop de Control (Física)
         loop {
@@ -108,6 +114,25 @@ async fn main() -> Result<(), anyhow::Error> {
                  current_spectrum = spectrum; 
              }
              let current_stimulus = current_spectrum.rms;
+
+             // B.2 SENSORY HEARTBEAT (Periodic Audio Reactions)
+             // Every ~2 seconds, if audio is interesting, generate a thought
+             if rng.gen_bool(0.03) { // ~3% chance per tick @ 60Hz = every ~0.5s on avg
+                 if current_spectrum.bass > 0.3 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "🔊 Bass resonance felt...".to_string()));
+                 } else if current_spectrum.rms > 0.1 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "🎧 Ambient audio detected.".to_string()));
+                 }
+             }
+             
+             // B.3 ENTROPY REACTIONS
+             if rng.gen_bool(0.02) { // ~2% chance
+                 if current_entropy > 0.7 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("⚡ High entropy ({:.2}) - Pattern disruption!", current_entropy)));
+                 } else if current_entropy < 0.1 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Low activity... entering stasis mode.".to_string()));
+                 }
+             }
 
              if !warmup_done && start_time.elapsed().as_secs() > 5 {
                 warmup_done = true;
@@ -137,6 +162,7 @@ async fn main() -> Result<(), anyhow::Error> {
             while let Ok(heard_text) = rx_ears.try_recv() {
                 // 1. Habituación (Boredom Sensor)
                 if let Ok(similarity) = hippocampus.check_novelty(&heard_text) {
+                     current_novelty = similarity; // Track for TUI
                      if similarity > 0.85 {
                          chemistry.adenosine += 0.1; // Increase Fatigue/Boredom
                          let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("Boredom spike (Sim: {:.2})", similarity)));
@@ -144,11 +170,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 }
 
                 // 1.5 Startle Reflex (Susto Acústico)
-                // Trigger based on GLOBAL current_spectrum (updated independently)
-                if current_spectrum.rms > 0.6 {
-                    chemistry.cortisol += 0.05; // Instant Stress Spike
-                    if current_spectrum.rms > 0.8 {
-                         chemistry.cortisol += 0.15; // PANIC
+                // Use BASS energy (more reactive than RMS)
+                let audio_intensity = current_spectrum.bass.max(current_spectrum.mids);
+                if audio_intensity > 0.3 {
+                    chemistry.cortisol += 0.02; // Mild stress from audio
+                    if audio_intensity > 0.5 {
+                        chemistry.cortisol += 0.05; // Medium stress
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "⚠️ Elevated audio intensity!".to_string()));
+                    }
+                    if audio_intensity > 0.7 {
+                         chemistry.cortisol += 0.1; // PANIC
                          let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "💥 LOUD NOISE DETECTED!".to_string()));
                     }
                 }
@@ -241,6 +272,8 @@ async fn main() -> Result<(), anyhow::Error> {
                  last_entropy_delta: 0.0,
                  neuron_active_count: 100 + (hippocampus.memory_count() * 5), // DENSITY FACTOR 5x
                  insight_intensity: current_insight, 
+                 activity_map: ego.get_activity_snapshot(),
+                 novelty_score: current_novelty,
             };
             // Note: I missed passing `current_insight` into telem because of scope. 
             // I will fix this by declaring `let mut current_insight = 0.0;` at start of loop

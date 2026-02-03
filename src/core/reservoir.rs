@@ -152,6 +152,15 @@ impl FractalReservoir {
         &self.state
     }
 
+    /// Returns normalized activity map as Vec<f32> (0.0 - 1.0) for visualization
+    pub fn get_activity_snapshot(&self) -> Vec<f32> {
+        let max = self.activity_map.max();
+        if max < 0.001 {
+            return vec![0.0; self.activity_map.len()];
+        }
+        self.activity_map.iter().map(|v| (v / max).clamp(0.0, 1.0)).collect()
+    }
+
     /// Verbaliza el estado del reservorio para el LLM
     pub fn get_state_description(&self) -> String {
         let variance = self.state.variance();
