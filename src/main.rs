@@ -97,7 +97,9 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // Estado
         let mut is_dreaming = false;
-        let mut thought_buffer: Vec<Thought> = Vec::new();
+        let mut is_dreaming = false;
+        // let mut thought_buffer: Vec<Thought> = Vec::new(); // Removed in favor of unified timeline
+        let start_time = Instant::now();
         let start_time = Instant::now();
         let mut warmup_done = false;
         let mut last_tick_time = Instant::now();
@@ -109,14 +111,14 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut current_novelty: f32 = 0.0; // Track last novelty score for TUI
         // let mut last_save_secs: u64 = 0; // REMOVED: Mechanical Honesty (Persistence only on Sleep)
         let mut growth_counter = 0; // Robust neurogenesis counter
-        let mut observer_logs: Vec<String> = Vec::new(); // Persistent logs for TUI
+        let mut timeline: Vec<Thought> = Vec::new(); // Unified Timeline (was observer_logs + thought_buffer)
         let mut hippocampus_total_memories = 0; // MECHANICAL HONESTY: True weight of memory
         
         // METABOLIC CLOCK
         let mut rumination_timer = 0.0;
         let mut target_fps = 60.0;
         
-        observer_logs.push("Neocortex Initializing...".to_string());
+        timeline.push(Thought::new(MindVoice::System, "Neocortex Initializing...".to_string()));
 
         // Loop de Control (Física)
         loop {
@@ -218,13 +220,9 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // C. HANDLE THOUGHTS (Buffer for TUI)
             while let Ok(thought) = rx_thoughts.try_recv() {
-                // Also add to observer logs for persistence/scrolling if it's a system message
-                if matches!(thought.voice, MindVoice::System | MindVoice::Chem) {
-                    observer_logs.push(format!("[{}] {}", match thought.voice { MindVoice::System => "SYS", _ => "BIO" }, thought.text));
-                    if observer_logs.len() > 100 { observer_logs.remove(0); }
-                }
-                thought_buffer.push(thought);
-                if thought_buffer.len() > 30 { thought_buffer.remove(0); }
+                // UNIFIED TIMELINE: FIFO Buffer
+                timeline.push(thought);
+                if timeline.len() > 100 { timeline.remove(0); }
             }
 
             // C.5 HANDLE COMMANDS (Poke Reflex)
@@ -268,7 +266,10 @@ async fn main() -> Result<(), anyhow::Error> {
                      ego.neurogenesis(5); // Sleep is anabolic
                      let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
                          format!("💤🧠 Sleep Architecture: Rebuilt +5 neurons. (Total: {})", ego.current_size())));
-                     observer_logs.push(format!("[BIO] 💤 Growth: +5 neurons (Consolidation)"));
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                         format!("💤🧠 Sleep Architecture: Rebuilt +5 neurons. (Total: {})", ego.current_size())));
+                     // Log handled by tx_thoughts above, no need to push to observer_logs manually
+                     continue; // Skip normal processing
                      continue; // Skip normal processing
                 }
                 
@@ -288,7 +289,9 @@ async fn main() -> Result<(), anyhow::Error> {
                     ego.neurogenesis(growth.clamp(1, 4));
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
                         format!("🌱 Structural Growth: +{} neurons (Pool: {})", growth.clamp(1, 4), ego.current_size())));
-                    observer_logs.push(format!("[BIO] 🌱 Growth: +{} neurons", growth.clamp(1, 4)));
+                    let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
+                        format!("🌱 Structural Growth: +{} neurons (Pool: {})", growth.clamp(1, 4), ego.current_size())));
+                    // observer_logs auto-fill via rx_thoughts loop
                  }
 
                 // 4. Update Memory Pressure (Volatile Only)
@@ -421,8 +424,10 @@ async fn main() -> Result<(), anyhow::Error> {
                  dopamine: chemistry.dopamine,
                  cortisol: chemistry.cortisol,
                   adenosine: chemistry.adenosine,
-                  thoughts: thought_buffer.clone(),
-                  logs: observer_logs.clone(),
+                  cortisol: chemistry.cortisol,
+                  adenosine: chemistry.adenosine,
+                  timeline: timeline.clone(), // Unified history
+                  cpu_load: last_body_state.cpu_usage,
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,
                   last_entropy_delta: 0.0,

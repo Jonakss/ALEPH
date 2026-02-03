@@ -57,7 +57,17 @@ impl CognitiveCore {
                     let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "Cortex Thread: READY. Waiting for input...".to_string()));
                     
                     // 2. Event Loop (Consciencia Hub)
-                    while let Ok(msg) = input_rx.recv() {
+                    loop {
+                        // Heartbeat check every 30s
+                        let msg = match input_rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                            Ok(m) => m,
+                            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "💓 Cortex Heartbeat: Idle but Listening...".to_string()));
+                                continue;
+                            },
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                        };
+
                          // MECHANICAL HONESTY: Hyperparameters tied to Biological State
                          // 1. Entropy -> Temperature (Chaos drives creativity/instability)
                          // Base temp 0.7. Entropy > 0.8 spikes temp to > 1.2

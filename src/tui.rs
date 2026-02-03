@@ -25,8 +25,9 @@ pub struct Telemetry {
     pub dopamine: f32,  // Reward
     pub cortisol: f32,  // Stress
     pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
-    pub thoughts: Vec<Thought>, // Stream of Consciousness
-    pub logs: Vec<String>,     // Observer Logs
+    pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
+    pub timeline: Vec<Thought>, // Unified Stream of Consciousness
+    pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
     pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
     pub novelty_score: f32, // Last novelty check result
     pub reservoir_state: String, // Description of reservoir mood
@@ -48,8 +49,8 @@ impl Default for Telemetry {
             dopamine: 0.5,
             cortisol: 0.0,
             insight_intensity: 0.0,
-            thoughts: Vec::new(),
-            logs: Vec::new(),
+            insight_intensity: 0.0,
+            timeline: Vec::new(),
             activity_map: vec![0.0; 100],
             novelty_score: 0.0,
             reservoir_state: "Estable".to_string(),
@@ -219,7 +220,8 @@ pub fn ui(
     
     // Mix Logs and Thoughts logically or just thoughts then logs?
     // User wants a better log, so let's show thoughts as the main feed and logs as system markers.
-    for t in &telemetry.thoughts {
+    // Unified Timeline Rendering
+    for t in &telemetry.timeline {
         let (label, color) = match t.voice {
             crate::core::thought::MindVoice::Sensory => ("[EAR]", Color::Cyan),
             crate::core::thought::MindVoice::Cortex => ("[CPU]", Color::Green),
@@ -229,14 +231,6 @@ pub fn ui(
         timeline_lines.push(Line::from(vec![
             Span::styled(format!("{:5} ", label), Style::default().fg(color).add_modifier(Modifier::BOLD)),
             Span::raw(&t.text),
-        ]));
-    }
-    
-    // Observer log (optional, only if not already summarized by thoughts)
-    for l in &telemetry.logs {
-        timeline_lines.push(Line::from(vec![
-            Span::styled("[OBS] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(l, Style::default().fg(Color::Gray)),
         ]));
     }
 
