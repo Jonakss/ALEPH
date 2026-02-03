@@ -34,7 +34,7 @@ const SPARSITY: f32 = 0.2;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // 0. TUI SETUP
-    let _stderr_gag = Gag::stderr().unwrap(); // Silence library noise (Whisper/ALSA)
+    // let _stderr_gag = Gag::stderr().unwrap(); // COMMENTED OUT FOR DEBUGGING CRASHES
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -321,7 +321,9 @@ async fn main() -> Result<(), anyhow::Error> {
                         entropy: current_entropy,
                         adenosine: chemistry.adenosine,
                     };
-                    let _ = tx.send(input);
+                    if let Err(_) = tx.send(input) {
+                        let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💀 CRITICAL: Neocortex Disconnected (Thread Died).".to_string()));
+                    }
                 } else {
                     crate::actuators::voice::speak(mem_out.input_text, tx_thoughts.clone());
                 }
@@ -442,8 +444,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // H. METABOLIC CLOCK (Variable Hz & Thought Rate)
             // 1. Calculate Rumination Threshold (Bio-Time)
-            // Base: 20s. Dopamine speeds it up (10s). Adenosine slows it down (60s).
-            let rumination_threshold = 20.0 * (1.0 + chemistry.adenosine * 2.0) / (1.0 + chemistry.dopamine);
+            // Base: 5s (Chatty). Dopamine speeds it up (2.5s). Adenosine slows it down (15s).
+            let rumination_threshold = 5.0 * (1.0 + chemistry.adenosine * 2.0) / (1.0 + chemistry.dopamine);
             
             rumination_timer += delta_time;
             if rumination_timer > rumination_threshold {
@@ -471,7 +473,7 @@ async fn main() -> Result<(), anyhow::Error> {
     
     // History Buffers for Charts
     let mut entropy_history: Vec<(f64, f64)> = Vec::new(); // Scatter chart
-    let window_width = 10.0;
+    let window_width = 60.0;
     let start_app_time = Instant::now();
     let mut log_scroll: usize = 0;
 
