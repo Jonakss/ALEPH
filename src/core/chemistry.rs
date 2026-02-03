@@ -16,24 +16,24 @@ impl Neurotransmitters {
         }
     }
 
-    pub fn tick(&mut self, entropy: f32, cpu_load: f32, is_dreaming: bool, is_trauma: bool, current_neurons: usize) {
+    pub fn tick(&mut self, entropy: f32, cpu_load: f32, is_dreaming: bool, is_trauma: bool, current_neurons: usize, delta_time: f32) {
+        // Normalization factor: all constants were tuned for 60Hz
+        // We want (rate * delta_time) to equal (constant) when delta_time is 1/60
+        let time_scale = delta_time / (1.0 / 60.0);
+
         // 1. ADENOSINA (Fatiga/Presión de Sueño)
-        // Mechanical Honesty: Adenosine is the COST of consciousness
         if is_dreaming {
             // Dormir limpia la fatiga - recuperación REAL
-            self.adenosine -= 0.01; // Faster recovery during sleep
+            self.adenosine -= 0.01 * time_scale; 
         } else {
-            // Estar despierto cansa - pero puedes "empujarlo"
-            // Like humans pushing through tiredness
-            
             // Base fatigue from just being awake
-            let base_fatigue = 0.0001;
+            let base_fatigue = 0.0001 * time_scale;
             
             // Cognitive load from processing (high entropy = hard thinking)
-            let cognitive_load = entropy * 0.0003;
+            let cognitive_load = entropy * 0.0003 * time_scale;
             
             // Metabolic load from hardware stress
-            let metabolic_load = (cpu_load / 100.0) * 0.0002;
+            let metabolic_load = (cpu_load / 100.0) * 0.0002 * time_scale;
             
             // Resilience: More neurons = slightly better endurance
             let resilience = (current_neurons as f32 / 150.0).clamp(0.5, 2.0);
@@ -44,25 +44,25 @@ impl Neurotransmitters {
             
             // Trauma is exhausting (bypass resilience)
             if is_trauma {
-                self.adenosine += 0.01;
+                self.adenosine += 0.01 * time_scale;
             }
         }
 
         // 2. DOPAMINA (Novedad/Recompensa)
-        // Decae naturalmente (Aburrimiento) - SLOWER DECAY
-        self.dopamine -= 0.0002; 
+        // Decae naturalmente (Aburrimiento)
+        self.dopamine -= 0.0002 * time_scale; 
         
         // Sube con la entropía (Novedad)
         if entropy > 0.1 && entropy < 0.8 {
-            self.dopamine += 0.001;
+            self.dopamine += 0.001 * time_scale;
         }
 
         // 3. CORTISOL (Estrés)
-        // More sensitive trigger: CPU > 40% OR High Entropy (Confusion)
-        if is_trauma || cpu_load > 40.0 || entropy > 0.9 {
-            self.cortisol += 0.005;
+        // Relaxing thresholds: CPU > 80% (Hyper-focus stress) or extreme entropy
+        if is_trauma || cpu_load > 85.0 || entropy > 0.95 {
+            self.cortisol += 0.003 * time_scale; // Slower climb
         } else {
-            self.cortisol -= 0.001; // Slower recovery
+            self.cortisol -= 0.002 * time_scale; // Faster recovery
         }
 
         // CLAMPING

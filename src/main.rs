@@ -69,7 +69,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ears.set_mute(true); // Mute during warmup
 
         let mut current_spectrum = senses::ears::AudioSpectrum::default(); 
-        let mut previous_spectrum = current_spectrum.clone();
+        let mut previous_spectrum = senses::ears::AudioSpectrum::default();
 
         // 4. Inicializar Neocórtex Asíncrono (TinyLlama Thread)
         let (tx_cortex, rx_cortex_out): (Option<mpsc::Sender<CortexInput>>, Option<mpsc::Receiver<CortexOutput>>) = match CognitiveCore::spawn(tx_thoughts.clone()) {
@@ -97,13 +97,18 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut thought_buffer: Vec<Thought> = Vec::new();
         let start_time = Instant::now();
         let mut warmup_done = false;
-        let current_log = "Neocortex Initializing...".to_string();
+        let mut last_tick_time = Instant::now();
+        let _last_cycle_time = Instant::now(); // For true FPS reporting (unused for now)
 
         let mut rng = rand::thread_rng();
         let mut current_entropy = 0.0; // Track entropy for memory tagging
         let mut current_insight = 0.0; // Track max relevance for visual flash
         let mut current_novelty: f32 = 0.0; // Track last novelty score for TUI
         let mut last_save_secs: u64 = 0; // For periodic persistence
+        let mut growth_counter = 0; // Robust neurogenesis counter
+        let mut observer_logs: Vec<String> = Vec::new(); // Persistent logs for TUI
+        
+        observer_logs.push("Neocortex Initializing...".to_string());
 
         // Loop de Control (Física)
         loop {
@@ -118,6 +123,7 @@ async fn main() -> Result<(), anyhow::Error> {
              while let Ok(status) = rx_body.try_recv() { last_body_state = status; }
 
              // A. UPDATE SENSES
+            previous_spectrum = current_spectrum.clone(); // CRITICAL: Track delta
             if let Ok(spec) = rx_spectrum.try_recv() {
                 current_spectrum = spec;
             }
@@ -137,10 +143,10 @@ async fn main() -> Result<(), anyhow::Error> {
                  chemistry.cortisol += 0.02;
              }
 
-             if delta_rms > 0.4 { // Sudden loud noise
+             if delta_rms > 0.6 { // Less sensitive amplitude spike
                  let _ = tx_thoughts.send(Thought::new(MindVoice::Sensory, "💥 STARTLE REFLEX: Sudden amplitude spike!".to_string()));
-                 chemistry.cortisol += 0.3;
-                 chemistry.adenosine += 0.05;
+                 chemistry.cortisol += 0.2;
+                 chemistry.adenosine += 0.02;
              }
              
              // B.3 ENTROPY REACTIONS (Rare, only extreme states)
@@ -206,6 +212,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
             // C. HANDLE THOUGHTS (Buffer for TUI)
             while let Ok(thought) = rx_thoughts.try_recv() {
+                // Also add to observer logs for persistence/scrolling if it's a system message
+                if matches!(thought.voice, MindVoice::System | MindVoice::Chem) {
+                    observer_logs.push(format!("[{}] {}", match thought.voice { MindVoice::System => "SYS", _ => "BIO" }, thought.text));
+                    if observer_logs.len() > 100 { observer_logs.remove(0); }
+                }
                 thought_buffer.push(thought);
                 if thought_buffer.len() > 30 { thought_buffer.remove(0); }
             }
@@ -225,7 +236,7 @@ async fn main() -> Result<(), anyhow::Error> {
             while let Ok(heard_text) = rx_ears.try_recv() {
                 // 1. Habituación (Boredom Sensor)
                 if let Ok(similarity) = hippocampus.check_novelty(&heard_text) {
-                     current_novelty = similarity; // Track for TUI
+                     current_novelty = 1.0 - similarity; // NOVELTY = 1 - SIMILARITY
                      if similarity > 0.85 {
                          chemistry.adenosine += 0.1; // Increase Fatigue/Boredom
                          let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, format!("Boredom spike (Sim: {:.2})", similarity)));
@@ -252,13 +263,17 @@ async fn main() -> Result<(), anyhow::Error> {
                 
                 // MECHANICAL HONESTY: New memory = new neural connections
                 // Every 10 memories, grow 1-3 neurons (if under capacity)
-                let memory_count = hippocampus.memory_count();
-                if memory_count % 10 == 0 && ego.current_size() < 300 {
-                    let growth = (current_novelty * 3.0).ceil() as usize; // Novel = more growth
-                    ego.neurogenesis(growth.clamp(1, 3));
+                 // MECHANICAL HONESTY: New memory = new neural connections
+                 // Every 10 memories, grow 1-3 neurons (if under capacity)
+                 growth_counter += 1;
+                 if growth_counter >= 5 && ego.current_size() < 300 { // Every 5 memories
+                    growth_counter = 0;
+                    // High novelty = high growth multiplier
+                    let growth = (current_novelty * 5.0).ceil() as usize; 
+                    ego.neurogenesis(growth.clamp(1, 4));
                     let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
-                        format!("🌱 Neurogenesis: +{} neurons (Total: {})", growth, ego.current_size())));
-                }
+                        format!("🌱 Structural Growth: +{} neurons (Pool: {})", growth.clamp(1, 4), ego.current_size())));
+                 }
 
                 // 3. Recordar (RAG)
                 // 3. Recordar (RAG)
@@ -330,12 +345,18 @@ async fn main() -> Result<(), anyhow::Error> {
                     noise
                 })
                 .collect();
-            let input_vector = DVector::from_vec(input_noise);
+             let input_vector = DVector::from_vec(input_noise);
             let entropy = ego.tick(&input_vector);
             
-            current_entropy = entropy; // Update for next tick
+            // TIME SYNCHRONIZATION: Calculate real delta_time
+            let delta_time = last_tick_time.elapsed().as_secs_f32();
+            last_tick_time = Instant::now();
+            let real_fps = 1.0 / delta_time.max(0.001);
 
-            chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, false, ego.current_size());
+            current_entropy = entropy; 
+
+            // Update chemistry with real delta_time (Real-time continuity)
+            chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, false, ego.current_size(), delta_time);
 
             // G. TELEMETRY SEND
             let status = if is_dreaming { "DREAMING" } else { "AWAKE" };
@@ -351,29 +372,31 @@ async fn main() -> Result<(), anyhow::Error> {
             // But let's assume if RAG triggered THIS tick, we show it THIS tick.
             
             let telem = tui::Telemetry {
-                 fps: 60.0,
+                 fps: real_fps as f64,
                  audio_spectrum: current_spectrum.clone(), 
                  entropy: entropy,
                  system_status: status.to_string(),
                  dopamine: chemistry.dopamine,
                  cortisol: chemistry.cortisol,
-                 adenosine: chemistry.adenosine,
-                 thoughts: thought_buffer.clone(),
-                 cpu_load: last_body_state.cpu_usage,
-                 ram_load: last_body_state.ram_usage,
-                 log_message: Some(current_log.clone()),
-                 last_entropy_delta: 0.0,
-                 neuron_active_count: 100 + (hippocampus.memory_count() * 5), // DENSITY FACTOR 5x
-                 insight_intensity: current_insight, 
-                 activity_map: ego.get_activity_snapshot(),
-                 novelty_score: current_novelty,
-            };
+                  adenosine: chemistry.adenosine,
+                  thoughts: thought_buffer.clone(),
+                  logs: observer_logs.clone(),
+                  cpu_load: last_body_state.cpu_usage,
+                  ram_load: last_body_state.ram_usage,
+                  last_entropy_delta: 0.0,
+                  neuron_active_count: ego.current_size() + (hippocampus.memory_count() / 5), // Structural + Memory Density
+                  insight_intensity: current_insight, 
+                  activity_map: ego.get_activity_snapshot(),
+                  novelty_score: current_novelty,
+             };
             // Note: I missed passing `current_insight` into telem because of scope. 
             // I will fix this by declaring `let mut current_insight = 0.0;` at start of loop
             // and resetting it at top of loop.
             let _ = tx_telemetry.send(telem);
 
-            previous_spectrum = current_spectrum.clone();
+            // G.2 PREPARE FOR NEXT TICK
+            // previous_spectrum is already updated at the top of loop. 
+            // We can remove the redundant update here to satisfy lints.
 
             let elapsed = start.elapsed();
             if elapsed < Duration::from_millis(1000 / FRECUENCIA_HZ) {
@@ -389,6 +412,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut entropy_history: Vec<(f64, f64)> = Vec::new(); // Scatter chart
     let window_width = 10.0;
     let start_app_time = Instant::now();
+    let mut log_scroll: usize = 0;
 
     loop {
         // Update State
@@ -410,7 +434,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 &last_telemetry, 
                 &entropy_history, 
                 start_app_time.elapsed().as_secs_f64(), 
-                window_width
+                window_width,
+                log_scroll
             );
         })?;
 
@@ -419,6 +444,15 @@ async fn main() -> Result<(), anyhow::Error> {
             if let Event::Key(key) = event::read()? {
                 if key.code == KeyCode::Char('q') {
                     break;
+                }
+                if key.code == KeyCode::Up {
+                    log_scroll = log_scroll.saturating_add(1);
+                }
+                if key.code == KeyCode::Down {
+                    log_scroll = log_scroll.saturating_sub(1);
+                }
+                if key.code == KeyCode::Char('r') { // Reset scroll
+                    log_scroll = 0;
                 }
                 if key.code == KeyCode::Char('p') || key.code == KeyCode::Char(' ') {
                     let _ = tx_cmd.send(BackendCommand::Poke);
