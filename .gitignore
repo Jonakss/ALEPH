@@ -18,7 +18,12 @@
 *.onnx
 
 # Carpetas específicas de modelos (por si acaso)
-models/
+models/*.gguf
+models/*.safetensors
+models/*.bin
+models/*.pt
+models/*.pth
+models/*.onnx
 weights/
 cache/
 

@@ -192,9 +192,7 @@ impl CognitiveCore {
         let mut pos = 0;
         
         let input_tensor = Tensor::new(token_ids.as_slice(), &self.device)?.unsqueeze(0)?;
-        eprintln!("DEBUG: Initial forward pass started, len={}", token_ids.len());
         let logits = self.model.forward(&input_tensor, pos)?;
-        eprintln!("DEBUG: Initial forward pass complete");
         let mut logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
         
         if logits.rank() == 2 {

@@ -651,10 +651,9 @@ async fn run_headless() -> Result<(), anyhow::Error> {
     use std::io::{self, BufRead, Write};
     
     println!("===========================================");
-    println!("  CWD: {:?}", std::env::current_dir().unwrap_or_default());
-    println!("  Model path: {}", "models/gemma-2b-it.Q4_K_M.gguf");
-    println!("  Model exists: {}", std::path::Path::new("models/gemma-2b-it.Q4_K_M.gguf").exists());
-    println!("  Tokenizer exists: {}", std::path::Path::new("models/tokenizer.json").exists());
+    println!("  ALEPH HEADLESS MODE (Lightning Studio)");
+    println!("  Type messages and press Enter to chat.");
+    println!("  Type 'quit' to exit.");
     println!("===========================================\n");
     
     // Initialize LLM
