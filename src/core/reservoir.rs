@@ -39,12 +39,25 @@ impl FractalReservoir {
     }
 
     /// EL LATIDO (Procesa realidad -> Devuelve sufrimiento)
-    pub fn tick(&mut self, input_signal: &DVector<f32>) -> f32 {
+    /// MECHANICAL HONESTY: Physics are modulated by Chemistry
+    pub fn tick(&mut self, input_signal: &DVector<f32>, dopamine: f32, adenosine: f32, cortisol: f32) -> f32 {
+        // 1. Modulate Plasticity (Leak Rate)
+        // Base 0.1. Dopamine increases flexibility (+0.2). Adenosine causes rigidity (-0.1).
+        // Range: ~0.05 (Tired/Bored) to ~0.4 (Excited)
+        let dynamic_leak = (0.15 + (dopamine * 0.2) - (adenosine * 0.1)).clamp(0.01, 1.0);
+        
+        // 2. Modulate Sensitivity (Input Gain)
+        // Cortisol amplifies input (Hypersensitivity). Adenosine dulls it.
+        let input_gain = (1.0 + (cortisol * 2.0) - (adenosine * 0.6)).max(0.1);
+        
         // Dinámica de Reservorio: x(t+1) = (1-a)x(t) + a*tanh(W*x(t) + u(t))
         let recurrent = &self.internal_weights * &self.state; // (N,N) * (N,1) -> (N,1)
-        let update = (recurrent + input_signal).map(|x| x.tanh());
+        // Apply input gain
+        let modulated_input = input_signal.map(|x| x * input_gain);
         
-        let new_state = (&self.state * (1.0 - self.leak_rate)) + (update * self.leak_rate);
+        let update = (recurrent + modulated_input).map(|x| x.tanh());
+        
+        let new_state = (&self.state * (1.0 - dynamic_leak)) + (update * dynamic_leak);
         
         // Track activity (Delta stats)
         let delta = (&new_state - &self.state).map(|x| x.abs());

@@ -14,6 +14,7 @@ pub struct Telemetry {
     pub audio_spectrum: crate::senses::ears::AudioSpectrum, // Full Spectrum
     pub entropy: f32,         // 0.0 - 1.0
     pub neuron_active_count: usize, // Memories (Vectors)
+    pub reservoir_size: usize,      // Structural Neurons (Processing Power)
     pub system_status: String,// "FLOW", "PANIC", etc.
     #[allow(dead_code)]
     pub last_entropy_delta: f32, // Cambio de entropía (reservado para Variable Metabolism)
@@ -37,6 +38,7 @@ impl Default for Telemetry {
             audio_spectrum: crate::senses::ears::AudioSpectrum::default(),
             entropy: 0.0,
             neuron_active_count: 0,
+            reservoir_size: 100, // Default start
             system_status: "INIT".to_string(),
             last_entropy_delta: 0.0,
             fps: 0.0,
@@ -165,7 +167,10 @@ pub fn ui(
         Line::from(vec![Span::raw("Mood:   "), Span::styled(telemetry.reservoir_state.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))]),
         Line::from(vec![Span::raw("Status: "), Span::styled(telemetry.system_status.clone(), Style::default().fg(gauge_color).add_modifier(Modifier::BOLD))]),
         Line::from(vec![Span::raw(format!("Tick:   {:.1} Hz", telemetry.fps))]),
-        Line::from(vec![Span::raw(format!("Brain:  {} nrns", telemetry.neuron_active_count))]),
+        Line::from(vec![Span::raw(format!("Tick:   {:.1} Hz", telemetry.fps))]),
+        Line::from(vec![Span::raw(format!("Nodes:  {}", telemetry.reservoir_size))]),
+        Line::from(vec![Span::raw(format!("Memry:  {}", telemetry.neuron_active_count))]),
+        Line::from(""),
         Line::from(""),
         Line::from(vec![Span::styled("--- METABOLISM ---", Style::default().add_modifier(Modifier::BOLD))]),
         Line::from(vec![Span::raw("DOPA: "), make_val_bar(telemetry.dopamine, Color::Cyan), Span::raw(format!(" {:.0}%", telemetry.dopamine * 100.0))]),

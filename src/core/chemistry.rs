@@ -16,7 +16,7 @@ impl Neurotransmitters {
         }
     }
 
-    pub fn tick(&mut self, entropy: f32, cpu_load: f32, is_dreaming: bool, is_trauma: bool, current_neurons: usize, delta_time: f32) {
+    pub fn tick(&mut self, entropy: f32, cpu_load: f32, is_dreaming: bool, shock_impact: f32, current_neurons: usize, delta_time: f32) {
         // Normalization factor: all constants were tuned for 60Hz
         // We want (rate * delta_time) to equal (constant) when delta_time is 1/60
         let time_scale = delta_time / (1.0 / 60.0);
@@ -44,9 +44,8 @@ impl Neurotransmitters {
             self.adenosine += total_load;
             
             // Trauma is exhausting (bypass resilience)
-            if is_trauma {
-                self.adenosine += 0.01 * time_scale;
-            }
+            // Trauma is exhausting (bypass resilience)
+            self.adenosine += shock_impact * 0.1 * time_scale;
         }
 
         // 2. DOPAMINA (Novedad/Recompensa)
@@ -59,9 +58,9 @@ impl Neurotransmitters {
         }
 
         // 3. CORTISOL (Estrés)
-        // Relaxing thresholds: CPU > 80% (Hyper-focus stress) or extreme entropy
-        if is_trauma || cpu_load > 85.0 || entropy > 0.95 {
-            self.cortisol += 0.003 * time_scale; // Slower climb
+        // Relaxing thresholds: CPU > 60% (Moderate load) or Entropy > 0.75 (High complexity)
+        if is_trauma || cpu_load > 60.0 || entropy > 0.75 {
+            self.cortisol += 0.005 * time_scale; // Faster reaction to stress
         } else {
             self.cortisol -= 0.002 * time_scale; // Faster recovery
         }

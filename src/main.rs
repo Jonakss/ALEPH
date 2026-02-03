@@ -341,7 +341,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 })
                 .collect();
              let input_vector = DVector::from_vec(input_noise);
-            let entropy = ego.tick(&input_vector);
+            // MECHANICAL HONESTY: The body feels the drugs
+            let entropy = ego.tick(&input_vector, chemistry.dopamine, chemistry.adenosine, chemistry.cortisol);
             
             // TIME SYNCHRONIZATION: Calculate real delta_time
             let delta_time = last_tick_time.elapsed().as_secs_f32();
@@ -350,8 +351,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
             current_entropy = entropy; 
 
-            // Update chemistry with real delta_time (Real-time continuity)
-            chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, false, ego.current_size(), delta_time);
+            // Track trauma directly (Raw Physics)
+            let shock_value = delta_rms.max(0.0); // No threshold, just magnitude
+
+            // Updated chemistry.tick call
+            chemistry.tick(entropy, last_body_state.cpu_usage, is_dreaming, shock_value, ego.current_size(), delta_time);
 
             // G. TELEMETRY SEND
             let status = if is_dreaming { "DREAMING" } else { "AWAKE" };
@@ -379,7 +383,8 @@ async fn main() -> Result<(), anyhow::Error> {
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,
                   last_entropy_delta: 0.0,
-                  neuron_active_count: hippocampus_total_memories, // MECHANICAL HONESTY: Vectors are the neurons
+                  neuron_active_count: hippocampus_total_memories, // Memories (Engrams)
+                  reservoir_size: ego.current_size(),              // Active Processing Nodes
                   insight_intensity: current_insight, 
                   activity_map: ego.get_activity_snapshot(),
                   novelty_score: current_novelty,
