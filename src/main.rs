@@ -215,11 +215,11 @@ async fn main() -> Result<(), anyhow::Error> {
                 ego.reset_activity_map();
             }
             
-            // OPTIONAL SLEEP: High CPU triggers rest mode (but not forced)
-            if last_body_state.cpu_usage > 90.0 && !is_dreaming { 
+            // OPTIONAL SLEEP: Only if CPU is extremely high (98%+)
+            if last_body_state.cpu_usage > 98.0 && !is_dreaming { 
                 is_dreaming = true; 
                 let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, "😴 Entering rest mode (high system load).".to_string()));
-            } else if last_body_state.cpu_usage < 70.0 && is_dreaming && chemistry.is_recovered_to_wake() {
+            } else if last_body_state.cpu_usage < 95.0 && is_dreaming && chemistry.is_recovered_to_wake() {
                 is_dreaming = false; // Solo despertar cuando hubo recuperación real (hysteresis)
             }
 

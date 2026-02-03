@@ -35,8 +35,8 @@ impl Neurotransmitters {
             // Was 0.0001 -> Tuned to 0.00001 (Micro-dosing effort)
             let cognitive_load = entropy * 0.00001 * time_scale;
             
-            // Metabolic load from hardware stress
-            let metabolic_load = (cpu_load / 100.0) * 0.0002 * time_scale;
+            // Metabolic load from hardware stress (MUCH SLOWER)
+            let metabolic_load = (cpu_load / 100.0) * 0.00005 * time_scale;
             
             // Resilience: More neurons = better endurance
             // Base divisor: 500.0 (At 500 neurons, resilience is 1.0)
@@ -48,8 +48,8 @@ impl Neurotransmitters {
             self.adenosine += total_load;
             
             // Trauma is exhausting (bypass resilience)
-            // Trauma is exhausting (bypass resilience)
-            self.adenosine += shock_impact * 0.1 * time_scale;
+            // Trauma is exhausting (bypass resilience) - but less severe
+            self.adenosine += shock_impact * 0.02 * time_scale;
         }
 
         // 2. DOPAMINA (Novedad/Recompensa)
@@ -103,8 +103,8 @@ impl Neurotransmitters {
     
     /// Check if body is at breaking point (forced sleep)
     pub fn is_body_failing(&self) -> bool {
-        // At 95%+ adenosine, the body CANNOT continue
-        self.adenosine > 0.95
+        // Only at 99%+ adenosine does the body FORCE sleep
+        self.adenosine > 0.99
     }
 
     /// Check if recovered enough to wake (HYSTERESIS - evita bucle colapso/despertar)

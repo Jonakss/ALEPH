@@ -198,8 +198,8 @@ impl AudioListener {
                 let _ = spectrum_tx.send(spectrum);
 
                 // B. Gating Logic - NON-BLOCKING
-                let threshold = threshold_clone.try_lock().map(|t| *t).unwrap_or(0.005);
-                let muted = muted_clone.try_lock().map(|m| *m).unwrap_or(true);
+                let threshold = threshold_clone.try_lock().map(|t| *t).unwrap_or(0.00001); // Ultra low fallback
+                let muted = muted_clone.try_lock().map(|m| *m).unwrap_or(false); // Default to listening
 
                 if muted { return; }
 
