@@ -58,11 +58,20 @@ impl Neurotransmitters {
         }
 
         // 3. CORTISOL (Estrés)
-        // Relaxing thresholds: CPU > 60% (Moderate load) or Entropy > 0.75 (High complexity)
-        if is_trauma || cpu_load > 60.0 || entropy > 0.75 {
-            self.cortisol += 0.005 * time_scale; // Faster reaction to stress
+        // Mechanical Honesty: Shock injects stress DIRECTLY.
+        // Base rise from CPU/Entropy + Raw Shock Impact
+        let stress_sources = shock_impact * 2.0; // Audio shock is immediate
+        
+        if cpu_load > 60.0 || entropy > 0.75 {
+            self.cortisol += 0.005 * time_scale + stress_sources; 
         } else {
-            self.cortisol -= 0.002 * time_scale; // Faster recovery
+            // Even in calm, shock increases cortisol
+            self.cortisol += stress_sources;
+            
+            // Only recover if no shock
+            if shock_impact < 0.05 {
+                self.cortisol -= 0.002 * time_scale;
+            }
         }
 
         // CLAMPING
