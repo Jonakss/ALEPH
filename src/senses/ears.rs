@@ -125,7 +125,7 @@ impl AudioListener {
         let muted_clone = is_muted.clone();
         let threshold_clone = attention_threshold.clone();
         let fft_clone = fft_arc.clone();
-        let scratch_clone = fft_scratch.clone();
+        let _scratch_clone = fft_scratch.clone();
         
         let stream = device.build_input_stream(
             &config.into(),

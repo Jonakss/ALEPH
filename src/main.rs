@@ -30,7 +30,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 // CONFIGURACIÓN DE VIDA
 const NEURONAS: usize = 500;
 const SPARSITY: f32 = 0.2;
-const FRECUENCIA_HZ: u64 = 60; 
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -57,7 +56,6 @@ async fn main() -> Result<(), anyhow::Error> {
         let (tx_mem, rx_mem, rx_mem_log) = core::hippocampus::Hippocampus::spawn()
             .expect("HIPPOCAMPUS INIT FAILED");
 
-        // 3. Sistema Sensorial (The Senses)
         // 3. Sistema Sensorial (The Senses)
         let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
         let (tx_ears, rx_ears) = mpsc::channel::<String>();
@@ -97,9 +95,7 @@ async fn main() -> Result<(), anyhow::Error> {
         
         // Estado
         let mut is_dreaming = false;
-        let mut is_dreaming = false;
         // let mut thought_buffer: Vec<Thought> = Vec::new(); // Removed in favor of unified timeline
-        let start_time = Instant::now();
         let start_time = Instant::now();
         let mut warmup_done = false;
         let mut last_tick_time = Instant::now();
@@ -270,7 +266,6 @@ async fn main() -> Result<(), anyhow::Error> {
                          format!("💤🧠 Sleep Architecture: Rebuilt +5 neurons. (Total: {})", ego.current_size())));
                      // Log handled by tx_thoughts above, no need to push to observer_logs manually
                      continue; // Skip normal processing
-                     continue; // Skip normal processing
                 }
                 
                 // 2. Neurochemistry Reaction
@@ -427,7 +422,6 @@ async fn main() -> Result<(), anyhow::Error> {
                   cortisol: chemistry.cortisol,
                   adenosine: chemistry.adenosine,
                   timeline: timeline.clone(), // Unified history
-                  cpu_load: last_body_state.cpu_usage,
                   cpu_load: last_body_state.cpu_usage,
                   ram_load: last_body_state.ram_usage,
                   last_entropy_delta: 0.0,

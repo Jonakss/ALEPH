@@ -89,6 +89,8 @@ impl VectorStore {
     }
 
     /// Guarda un recuerdo nuevo (RAM ONLY - Volatile)
+    /// Guarda un recuerdo nuevo (RAM ONLY - Volatile)
+    #[allow(dead_code)]
     pub fn add(&mut self, text: String, tags: Vec<String>, entropy: f32) -> Result<()> {
         let embedding = self.embed(&text)?;
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
@@ -123,6 +125,8 @@ impl VectorStore {
     }
 
     /// Recupera memorias similares (Semantic Search)
+    /// Recupera memorias similares (Semantic Search)
+    #[allow(dead_code)]
     pub fn search(&self, query: &str, top_k: usize) -> Result<Vec<(String, f32)>> {
         if self.memories.is_empty() {
             return Ok(Vec::new());
@@ -150,6 +154,9 @@ impl VectorStore {
 
     /// Detecta si el input es nuevo o repetitivo (Habituation)
     /// Retorna la similitud máxima encontrada (0.0 = Nuevo, 1.0 = Idéntico)
+    /// Detecta si el input es nuevo o repetitivo (Habituation)
+    /// Retorna la similitud máxima encontrada (0.0 = Nuevo, 1.0 = Idéntico)
+    #[allow(dead_code)]
     pub fn get_max_similarity(&self, text: &str) -> Result<f32> {
         if self.memories.is_empty() { return Ok(0.0); }
         

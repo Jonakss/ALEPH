@@ -5,6 +5,7 @@ use ratatui::{
 };
 use crate::core::thought::{Thought, MindVoice};
 
+#[allow(dead_code)]
 pub fn render_monologue<'a>(thoughts: &'a [Thought], insight_intensity: f32) -> List<'a> {
     let items: Vec<ListItem> = thoughts
         .iter()

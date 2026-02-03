@@ -7,7 +7,7 @@ use rand_distr::{Normal, Uniform};
 pub struct FractalReservoir {
     internal_weights: DMatrix<f32>, // El "Connectome"
     state: DVector<f32>,            // El estado anímico actual
-    leak_rate: f32,                 // Inercia temporal
+    _leak_rate: f32,                 // Inercia temporal
     activity_map: DVector<f32>,     // Trackeo de uso para Apoptosis
 }
 
@@ -33,7 +33,7 @@ impl FractalReservoir {
         Self {
             internal_weights: weights,
             state: DVector::zeros(size),
-            leak_rate: 0.2, // 20% novedad, 80% memoria
+            _leak_rate: 0.2, // 20% novedad, 80% memoria
             activity_map: DVector::zeros(size),
         }
     }

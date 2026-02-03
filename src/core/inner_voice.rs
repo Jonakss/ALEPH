@@ -1,6 +1,6 @@
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::time::Duration;
+
 use crate::core::thought::{Thought, MindVoice};
 use crate::core::llm::CortexInput;
 use rand::Rng;

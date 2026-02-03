@@ -25,9 +25,7 @@ pub struct Telemetry {
     pub dopamine: f32,  // Reward
     pub cortisol: f32,  // Stress
     pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
-    pub insight_intensity: f32, // 0.0 - 1.0 (Flash trigger)
     pub timeline: Vec<Thought>, // Unified Stream of Consciousness
-    pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
     pub activity_map: Vec<f32>, // Neuronal activity (100 neurons, 0.0-1.0)
     pub novelty_score: f32, // Last novelty check result
     pub reservoir_state: String, // Description of reservoir mood
@@ -48,7 +46,7 @@ impl Default for Telemetry {
             adenosine: 0.0,
             dopamine: 0.5,
             cortisol: 0.0,
-            insight_intensity: 0.0,
+            cortisol: 0.0,
             insight_intensity: 0.0,
             timeline: Vec::new(),
             activity_map: vec![0.0; 100],

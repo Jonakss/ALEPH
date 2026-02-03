@@ -18,8 +18,8 @@ pub struct CortexInput {
     pub somatic_state: String, // Estado del Hardware (Cuerpo)
     pub long_term_memory: Option<String>,
     // Hardware State for Parametric Modulation
-    pub cpu_load: f32,    // 0.0 - 100.0
-    pub ram_pressure: f32, // 0.0 - 1.0
+    pub _cpu_load: f32,    // 0.0 - 100.0
+    pub _ram_pressure: f32, // 0.0 - 1.0
     pub cognitive_impairment: f32, // 0.0 - 1.0 (Brain fog)
     // BIOLOGICAL DRIVERS (MECHANICAL HONESTY)
     pub entropy: f32,      // 0.0 - 1.0+ (Chaos/Temperature)
