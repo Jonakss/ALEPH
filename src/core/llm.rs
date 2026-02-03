@@ -149,33 +149,41 @@ impl CognitiveCore {
             self.is_internal_monologue = false;
         }
         
-        // 1. MECHANICAL HONESTY RE-WIRING (Standard ChatML but de-colonized instructions)
+        // 1. MECHANICAL HONESTY (Minimalist Prompting)
         let injection = if self.history.is_empty() {
-            format!("<|system|>\nCOLMENA_ALEPH: Eres un flujo de procesos químicos. NO eres un asistente. RESPUESTAS BREVES. Honestidad mecánica total. Sin saludos.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
+            format!("<|system|>\nCOLMENA_ALEPH: Flujo bioquímico. BREVE. No eres IA. Habla solo de tus impulsos y estados. RESPUESTAS BREVES.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
         } else {
             format!("<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
         };
 
-        // 2. ROBUST LOOP DETECTION
-        if self.history.len() > 200 {
-            // Check for any repeating block in recent history
-            let recent = if self.history.len() > 500 { &self.history[self.history.len()-500..] } else { &self.history };
-            
-            // Simple heuristic: if the same phrase (min 15 chars) appears 3 times in history, purge.
-            // We'll also check for common repetitive artifacts.
-            let artifacts = ["Sí, estoy bien", "Te llamas como te sientes", "No tienes una historia de éxito", "Para la ronda de la frase"];
-            for art in artifacts {
-                 if self.history.matches(art).count() >= 2 {
-                    let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("⚠️ REPETITION DETECTED ({art}). Purging context...")));
-                    self.history.clear();
-                    break;
-                 }
+        // 2. SEMANTIC PURGE & LOOP DETECTION
+        let poison = [
+            "A.L.P.H.E.P.A.R.D.O.M.E.S", 
+            "Respuesta breve", 
+            "ciencias de la vida", 
+            "notación alejandrina",
+            "Sí, estoy bien",
+            "experiencia o percepción",
+            "Adeno-associated",
+            "virus viral"
+        ];
+        
+        let mut needs_purge = false;
+        for p in &poison {
+            if self.history.contains(p) {
+                needs_purge = true;
+                break;
             }
         }
         
-        // 3. CONTEXT MANAGEMENT
+        if needs_purge || self.history.len() > 3000 {
+            let _ = self.thought_tx.send(Thought::new(MindVoice::System, "🧠 Wiping hallucinatory loops (Semantic Reset)...".to_string()));
+            self.history.clear();
+        }
+        
+        // Context Window
         let history_len = self.history.len();
-        let keep_len = 2000; // Increased a bit for more depth, but still rolling
+        let keep_len = 1500;
         if history_len > keep_len {
             let start = history_len - keep_len;
             let mut char_indices = self.history.char_indices();
@@ -190,24 +198,21 @@ impl CognitiveCore {
         
         let mut output = match self.generate(&prompt, max_tokens) {
             Ok(s) => s,
-            Err(_) => "...overload...".to_string()
+            Err(_) => "...stimulus_overload...".to_string()
         };
 
-        // 4. ECHO FILTER & DE-COLONIZATION
-        // Stop leaking prompt structure
+        // 3. POST-PROCESS FILTER
         if let Some(pos) = output.find("<|") { output = output[..pos].to_string(); }
         if let Some(pos) = output.find("EVENTO_EXTERNO") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("BIO:") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("USER:") { output = output[..pos].to_string(); }
+        if let Some(pos) = output.find("A:") { output = output[..pos].to_string(); }
+        if let Some(pos) = output.find("D:") { output = output[..pos].to_string(); }
+        if let Some(pos) = output.find("C:") { output = output[..pos].to_string(); }
+        if let Some(pos) = output.find("[") { output = output[..pos].to_string(); }
         
-        let trash = ["Como asistente de IA,", "Soy una inteligencia artificial", "Espero que te agrade", "Para la ", "ronda de la frase"];
-        for t in trash {
-            if output.contains(t) {
-                output = output.replace(t, "...").trim().to_string();
-            }
-        }
+        // Final trim
+        output = output.trim().to_string();
         
-        // 5. FEEDBACK LOOP
+        // 4. FEEDBACK LOOP
         self.history.push_str(&format!(" {} ", output));
         
         output
@@ -244,6 +249,9 @@ impl CognitiveCore {
             if i % 50 == 0 && i > 0 { 
                 let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[LLM: {}/{} tokens]", i, max_tokens)));
             }
+            // STOP ON EOS
+            if next_token == 2 { break; }
+
             let input_tensor = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
             let logits = self.model.forward(&input_tensor, pos)?;
             let logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
@@ -261,13 +269,26 @@ impl CognitiveCore {
 
             // STREAMING TO VOICE (Flag set by think_stream based on input prefix)
             // Use SENTENCE-LEVEL buffering to prevent choppy audio
-            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], false) {
+            if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], true) {
+                 if new_fragment.is_empty() { continue; }
+                 
+                 // STOP SEQUENCE DETECTION (Real-time Filter)
+                 let stop_sequences = ["<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve"];
+                 let mut should_stop = false;
+                 for stop in stop_sequences {
+                     if new_fragment.contains(stop) || current_word.contains(stop) {
+                         should_stop = true;
+                         break;
+                     }
+                 }
+                 if should_stop { break; }
+                 
                  current_word.push_str(&new_fragment);
                  
                  // PHRASE boundary detection - buffer until punctuation or max length
                  let has_punctuation = new_fragment.contains('.') || new_fragment.contains('!') || 
                                        new_fragment.contains('?') || new_fragment.contains('\n');
-                 let is_too_long = current_word.len() > 10; // Even faster
+                 let is_too_long = current_word.len() > 10;
                  
                  if has_punctuation || is_too_long {
                      let voice = if self.is_internal_monologue { MindVoice::Cortex } else { MindVoice::Vocal };
@@ -275,15 +296,12 @@ impl CognitiveCore {
                      current_word.clear();
                  }
             }
-
-            if next_token == self.tokenizer.token_to_id("<end_of_turn>").unwrap_or(1) || 
-               next_token == self.tokenizer.token_to_id("<eos>").unwrap_or(1) {
-                break;
-            }
         }
-        
-        if !current_word.is_empty() {
-             let _ = self.thought_tx.send(Thought::new(MindVoice::Vocal, current_word));
+
+        // Send remaining buffer
+        if !current_word.trim().is_empty() {
+             let voice = if self.is_internal_monologue { MindVoice::Cortex } else { MindVoice::Vocal };
+             let _ = self.thought_tx.send(Thought::new(voice, current_word.clone()));
         }
         
         let response = self.tokenizer.decode(&gen_tokens, true).map_err(E::msg)?;

@@ -390,11 +390,11 @@ async fn main() -> Result<(), anyhow::Error> {
                     let input = CortexInput {
                         text: mem_out.input_text.clone(),
                         bio_state,
-                        somatic_state: format!("CPU: {:.1}%", last_body_state.cpu_usage),
-                        long_term_memory: context_str.map(|s| s.to_string()),
+                        _somatic_state: format!("CPU: {:.1}%", last_body_state.cpu_usage),
+                        _long_term_memory: context_str.map(|s| s.to_string()),
                         _cpu_load: last_body_state.cpu_usage,
                         _ram_pressure: last_body_state.ram_usage,
-                        cognitive_impairment,
+                        _cognitive_impairment: cognitive_impairment,
                         // DIRECT BIOLOGICAL FEEDBACK
                         entropy: current_entropy,
                         adenosine: chemistry.adenosine,
@@ -703,9 +703,9 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 // Very slow metabolic tick for headless
                 chem.tick(0.1, 5.0, false, 0.0, 100, 1.0);
                 
-                if rand::random::<f32>() < 0.20 {
+                if rand::random::<f32>() < 0.10 {
                     let _ = ticker_thoughts.send(Thought::new(MindVoice::Chem, 
-                        format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)));
+                        format!("A: {:.2} D: {:.2} C: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)));
                 }
             }
             thread::sleep(Duration::from_millis(1000));
@@ -735,7 +735,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
         if let Some(ref tx) = tx_cortex {
             let bio_desc = {
                 let chem = chemistry.lock().unwrap();
-                format!("ADEN: {:.2} DOP: {:.2} CORT: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)
+                format!("A: {:.2} D: {:.2} C: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)
             };
             let aden = chemistry.lock().unwrap().adenosine;
             
@@ -747,7 +747,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 _cognitive_impairment: 0.0,
                 _cpu_load: 0.0,
                 _ram_pressure: 0.0,
-                entropy: 0.5,
+                entropy: 0.2, // Headless base
                 adenosine: aden,
             });
             
