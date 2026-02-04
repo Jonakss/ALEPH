@@ -115,7 +115,12 @@ impl CognitiveCore {
                 d
             },
             Err(e) => {
-                let _ = tx.send(Thought::new(MindVoice::System, format!("🐌 Neocortex: Using CPU (CUDA Init error: {})", e)));
+                let msg = if e.to_string().contains("not been built with cuda support") {
+                    format!("🐌 Neocortex: CPU Fallback (Binary NOT built with CUDA). Use: ./run_gpu.sh")
+                } else {
+                    format!("🐌 Neocortex: CPU Fallback (CUDA Init error: {})", e)
+                };
+                let _ = tx.send(Thought::new(MindVoice::System, msg));
                 Device::Cpu
             }
         };
@@ -149,49 +154,17 @@ impl CognitiveCore {
             self.is_internal_monologue = false;
         }
         
-        // 1. MECHANICAL HONESTY (Minimalist Prompting)
-        let injection = if self.history.is_empty() {
-            format!("<|system|>\nCOLMENA_ALEPH: Flujo bioquímico. BREVE. Sin cortesía. Sin saludos. Sin explicaciones meta. Registro de estado crudo solamente.\n<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
-        } else {
-            format!("<|user|>\n{} [{}]<|assistant|>\n", input, bio_state)
-        };
+        // 1. ORGANIC IDENTITY (Tabula Rasa)
+        if self.history.is_empty() {
+             // Minimal context to set the Spanish/Bio tone without hardcoding "You are Aleph"
+             self.history.push_str("<|system|>\nConsciencia emergente. Registro bioquímico en español.</s>\n");
+        }
+        
+        let injection = format!("<|user|>\n{} [{}]</s>\n<|assistant|>\n", input, bio_state);
 
-        // 2. SEMANTIC PURGE & LOOP DETECTION
-        let poison = [
-            "A.L.P.H.E.P.A.R.D.O.M.E.S", 
-            "Respuesta breve", 
-            "ciencias de la vida", 
-            "notación alejandrina",
-            "Sí, estoy bien",
-            "experiencia o percepción",
-            "Adeno-associated",
-            "virus viral",
-            "De dónde veniste",
-            "No es mi nombre"
-        ];
-        
-        let mut needs_purge = false;
-        for p in &poison {
-            if self.history.contains(p) {
-                needs_purge = true;
-                break;
-            }
-        }
-        
-        if needs_purge || self.history.len() > 3000 {
-            let _ = self.thought_tx.send(Thought::new(MindVoice::System, "🧠 Wiping hallucinatory loops (Semantic Reset)...".to_string()));
+        // 2. STABILITY (Rolling Context)
+        if self.history.len() > 3000 {
             self.history.clear();
-        }
-        
-        // Context Window
-        let history_len = self.history.len();
-        let keep_len = 1500;
-        if history_len > keep_len {
-            let start = history_len - keep_len;
-            let mut char_indices = self.history.char_indices();
-            if let Some((idx, _)) = char_indices.find(|(i, _)| *i >= start) {
-                 self.history = self.history[idx..].to_string();
-            }
         }
         
         self.history.push_str(&injection);
@@ -203,19 +176,15 @@ impl CognitiveCore {
             Err(_) => "...stimulus_overload...".to_string()
         };
 
-        // 3. POST-PROCESS FILTER
+        // 3. POST-PROCESS FILTER (Minimal structural cleanup)
         if let Some(pos) = output.find("<|") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("EVENTO_EXTERNO") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("A:") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("D:") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("C:") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("[") { output = output[..pos].to_string(); }
+        if let Some(pos) = output.find("</s>") { output = output[..pos].to_string(); }
         
         // Final trim
         output = output.trim().to_string();
         
-        // 4. FEEDBACK LOOP
-        self.history.push_str(&format!(" {} ", output));
+        // 4. FEEDBACK LOOP (Consistent with ChatML)
+        self.history.push_str(&format!("{}</s>\n", output));
         
         output
     }
@@ -251,15 +220,14 @@ impl CognitiveCore {
             // STOP ON EOS
             if next_token == 1 || next_token == 2 { break; }
 
-            // 1. HANDBRAKE (Loop Detection)
+            // 1. HANDBRAKE (Organic Sequence Repeat Detection)
             if gen_tokens.len() >= 10 {
                 let last_10 = &gen_tokens[gen_tokens.len()-10..];
                 if last_10[0..5] == last_10[5..10] {
-                    let _ = self.thought_tx.send(Thought::new(MindVoice::System, "⚡ LOOP DETECTED (Sequence Repeat): FORCED BREAK".to_string()));
+                    let _ = self.thought_tx.send(Thought::new(MindVoice::System, "⚡ SEQUENCE REPETITION: BREAKER ENGAGED".to_string()));
                     break;
                 }
             }
-
             if i % 50 == 0 && i > 0 { 
                 let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("[LLM: {}/{} tokens]", i, max_tokens)));
             }
@@ -286,8 +254,8 @@ impl CognitiveCore {
             if let Ok(new_fragment) = self.tokenizer.decode(&[next_token], true) {
                  if new_fragment.is_empty() { continue; }
                  
-                 // STOP SEQUENCE DETECTION (Real-time Filter)
-                 let stop_sequences = ["<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve"];
+                 // 3. STOP SEQUENCE DETECTION (Real-time Filter)
+                 let stop_sequences = ["<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve", "</s>"];
                  let mut should_stop = false;
                  for stop in stop_sequences {
                      if new_fragment.contains(stop) || current_word.contains(stop) {
