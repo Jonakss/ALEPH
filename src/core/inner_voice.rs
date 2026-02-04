@@ -8,6 +8,7 @@ use crate::core::planet::CortexInput;
 /// Inner Voice - Silent rumination thread
 /// TRIGGERED BY BODY PULSE.
 /// Creates internal dialogue that is NOT vocalized, only logged to Stream of Consciousness.
+#[allow(dead_code)]
 pub fn spawn_inner_voice(
     tx_cortex: Sender<CortexInput>,
     tx_thoughts: Sender<Thought>,
@@ -40,7 +41,7 @@ pub fn spawn_inner_voice(
                 adenosine: 0.3,
                 dopamine: 0.5,
                 cortisol: 0.1,
-                oxytocin: 0.5,
+                _oxytocin: 0.5,
             };
             
             let _ = tx_cortex.send(input);

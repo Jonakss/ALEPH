@@ -1,45 +1,59 @@
 pub struct ExpressionGate {
     pub _metabolic_cost_per_word: f32,
-    pub _meaningful_threshold: f32,
+    pub meaningful_threshold: f32,
+    pub last_vocalization_tick: u64,
+    pub cooldown_ticks: u64,
 }
 
 impl ExpressionGate {
     pub fn new() -> Self {
         Self {
-            metabolic_cost_per_word: 0.01, // Cost in adenosine (conceptual)
-            meaningful_threshold: 0.2,     // Minimum "pressure" to speak
+            _metabolic_cost_per_word: 0.01,
+            meaningful_threshold: 0.5,  // RAISED: Minimum entropy to even consider speaking
+            last_vocalization_tick: 0,
+            cooldown_ticks: 300,        // ~5 seconds at 60Hz between vocalizations
         }
     }
 
-    pub fn attempt_vocalization(&self, adenosine: f32, entropy: f32, text: &str) -> bool {
-        // 1. METABOLIC VETO (The Body)
-        // If adenosine is > 0.85, the channel is physically blocked.
-        if adenosine > 0.85 {
+    pub fn attempt_vocalization(&mut self, adenosine: f32, entropy: f32, dopamine: f32, text: &str, current_tick: u64) -> bool {
+        // 0. COOLDOWN CHECK (Prevent verbal diarrhea)
+        if current_tick < self.last_vocalization_tick + self.cooldown_ticks {
             return false;
         }
 
-        // 2. SEMANTIC DENSITY (Anti-Hallucination)
-        // Avoid "afox" spam or short bursts of low entropy.
-        let word_count = text.split_whitespace().count();
-        if word_count < 2 { return false; } // Single words are usually noise in stream
-
-        // Density = Information per Unit.
-        // We approximate density by (Entropy * LengthFactor).
-        // High entropy (0.8) + Short length = High Density (Eureka)
-        // Low entropy (0.1) + Long length = Low Density (Rambling)
-        // But here we want to filter OUT empty noise.
-        
-        let semantic_density = entropy; // Simplification for now.
-        
-        if semantic_density < 0.2 {
-             // "Empty" thought.
+        // 1. PHYSICAL CHECK (The Body - Veto Power)
+        // If adenosine is > 0.8, the system is too tired. Silence.
+        if adenosine > 0.8 {
              return false;
         }
 
-        // 3. SENTENCE COMPLETION (Leyden Jar)
-        // Only release if it feels complete.
-        let is_complete = text.contains('.') || text.contains('!') || text.contains('?');
+        // 2. LENGTH CHECK (Avoid garbage tokens)
+        let word_count = text.split_whitespace().count();
+        if word_count < 3 { return false; }  // RAISED from 2
+        if word_count > 50 { return false; } // Too long = probably garbage
+
+        // 3. MINIMUM SIGNIFICANCE (Not everything is worth saying)
+        if entropy < self.meaningful_threshold {
+            return false;  // Too mundane
+        }
+
+        // 4. METABOLIC VALVE (Entropy vs Fatigue)
+        // The "Density" of the thought must justify the cost.
+        // Also factor in dopamine - high interest makes you more talkative.
+        let speech_drive = entropy + (dopamine * 0.3);
+        let speech_resistance = adenosine + 0.3; // Base resistance (silence is default)
         
-        is_complete
+        if speech_drive <= speech_resistance {
+            return false;
+        }
+
+        // 5. SENTENCE COMPLETION
+        let is_complete = text.contains('.') || text.contains('!') || text.contains('?');
+        if !is_complete { return false; }
+
+        // 6. VOCALIZATION APPROVED
+        self.last_vocalization_tick = current_tick;
+        true
     }
 }
+

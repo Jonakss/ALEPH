@@ -15,10 +15,12 @@ pub struct MemoryOutput {
 
 pub enum MemoryCommand {
     ProcessStimulus { text: String, entropy: f32 },
+    #[allow(dead_code)]
     ConsolidateSleep,
     #[allow(dead_code)]
     ForceSave, // Optional, but we prefer Sleep-based persistence
-    Shutdown { previous_genome: Genome, reply_tx: Sender<Genome> },
+    // Shutdown includes session stats for the alchemist
+    Shutdown { previous_genome: Genome, avg_friction: f32, reply_tx: Sender<Genome> },
 }
 
 pub struct Hippocampus {
@@ -62,8 +64,8 @@ impl Hippocampus {
                                     input_text: "CONSOLIDATION_EVENT".to_string(),
                                     novelty: 1.0, // High novelty to signify importance
                                     retrieval: None,
-                                    volatile_count: 0,
-                                    total_count: hippo.store.memory_count(),
+                                    _volatile_count: 0,
+                                    _total_count: hippo.store.memory_count(),
                                 });
                             },
                             Err(e) => { let _ = log_tx.send(format!("Sleep Error: {}", e)); }
@@ -72,11 +74,11 @@ impl Hippocampus {
                     MemoryCommand::ForceSave => {
                         let _ = hippo.store.save(); // Just in case
                     },
-                    MemoryCommand::Shutdown { previous_genome, reply_tx } => {
+                    MemoryCommand::Shutdown { previous_genome, avg_friction, reply_tx } => {
                         let _ = log_tx.send("💀 Hippocampus: Shutting down... Crystallizing Soul.".to_string());
                         
-                        // 1. Crystallize
-                        let new_genome = SoulMaterializer::crystallize(&hippo.store, previous_genome);
+                        // 1. Crystallize (Now using Friction)
+                        let new_genome = SoulMaterializer::crystallize(&hippo.store, previous_genome, avg_friction);
                         
                         // 2. Reply
                         let _ = reply_tx.send(new_genome);

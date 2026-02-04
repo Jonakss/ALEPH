@@ -41,7 +41,7 @@ pub fn run() -> Result<()> {
     
     // --- 1.5 THE SATELLITE (Observer) ---
     let satellite = Satellite::new(seed.paranoia, seed.refractive_index); 
-    let gate = ExpressionGate::new();
+    let mut gate = ExpressionGate::new();
     
     // Hardware Proprioception
     let (tx_body, rx_body) = mpsc::channel::<BodyStatus>();
@@ -157,7 +157,14 @@ pub fn run() -> Result<()> {
 
     // --- DAEMON LOOP (The Pulse) ---
     let mut last_tick = Instant::now();
-    let mut _current_entropy = 0.0;
+    #[allow(unused_assignments)]
+    let mut current_entropy = 0.0;
+    
+    // VARIABLE METABOLISM (Heart Rate)
+    // ALEPH's subjective time perception.
+    // 60Hz = Normal, 120Hz = Hyperfocus (High Dopamine), 24Hz = Bored/Tired (High Adenosine)
+    let mut current_hz: f32 = 60.0;
+    let hz_base = 60.0;
     
     // Session Stats for Mutation
     let mut _session_stress_accum = 0.0;
@@ -168,6 +175,7 @@ pub fn run() -> Result<()> {
     let mut telemetry_history: VecDeque<String> = VecDeque::with_capacity(30);
 
     while running.load(Ordering::SeqCst) {
+        let loop_start = Instant::now();
         let delta_time = last_tick.elapsed().as_secs_f32();
         last_tick = Instant::now();
 
@@ -208,12 +216,26 @@ pub fn run() -> Result<()> {
             for i in 20..30 { if i < input_signal.len() { input_signal[i] = last_spectrum.highs; } }
             
             // We use chemistry to modulate the reservoir's plasticity
+            // Pass delta_time directly to ensure time-invariance
             let entropy_output = ego.tick(&input_signal, 
                                           chem.dopamine, 
                                           chem.adenosine, 
-                                          chem.cortisol);
+                                          chem.cortisol,
+                                          delta_time);
             
             chem.tick(entropy_output, cpu_load, false, 0.0, ego.current_size(), delta_time);
+            
+            // VARIABLE METABOLISM: Calculate Target Hz
+            // Formula: Base + (Dopamine * 60) - (Adenosine * 40)
+            // High Dopamine -> 120Hz. High Adenosine -> 20Hz.
+            let target_hz = {
+                 let metabolic_drive = (chem.dopamine * 60.0) + (chem.cortisol * 30.0);
+                 let metabolic_drag = chem.adenosine * 40.0;
+                 (hz_base + metabolic_drive - metabolic_drag).clamp(24.0, 120.0)
+            };
+            
+            // Smooth transition (Heart Rate Variability)
+            current_hz = current_hz + (target_hz - current_hz) * 0.05;
             
             current_entropy = entropy_output;
             
@@ -230,7 +252,7 @@ pub fn run() -> Result<()> {
             let collapse_threshold = 0.9 + (seed.stress_tolerance * 0.1); 
             
             if chem.adenosine > collapse_threshold {
-                 if ticks % 300 == 0 { 
+                 if ticks % 3000 == 0 { // ~50 seconds between warnings
                      let _ = tx_thoughts.send(Thought::new(MindVoice::System, "⛔ SYSTEM CRITICAL: Metabolic Collapse Imminent. Functionality Limited.".to_string()));
                  }
             }
@@ -245,6 +267,14 @@ pub fn run() -> Result<()> {
              // Inject into Memory/Orbit
              // For now, treat as high-entropy injection
              current_entropy += 0.1;
+             
+             // WAKE UP EFFECT: User attention breaks the fatigue loop
+             {
+                 let mut chem = chemistry.lock().unwrap();
+                 chem.dopamine = (chem.dopamine + 0.3).min(1.0);  // Spike interest
+                 chem.adenosine = (chem.adenosine - 0.2).max(0.0); // Reduce fatigue
+                 chem.cortisol = (chem.cortisol - 0.1).max(0.0);   // Calm down
+             }
              
              // Create Cortex Input for User Stimulus
              let chem = chemistry.lock().unwrap();
@@ -263,7 +293,7 @@ pub fn run() -> Result<()> {
                  adenosine: chem.adenosine,
                  dopamine: chem.dopamine,
                  cortisol: chem.cortisol,
-                 oxytocin: chem.oxytocin,
+                 _oxytocin: chem.oxytocin,
              };
              
              // Force immediate thought generation
@@ -288,7 +318,7 @@ pub fn run() -> Result<()> {
             let mut chem = chemistry.lock().unwrap();
 
             // Update Stats
-            session_novelty_accum += mem_out.novelty;
+            // session_novelty_accum += mem_out.novelty; // Unused for now
             
             // Reaction to Novelty
             if mem_out.novelty > 0.85 {
@@ -312,7 +342,17 @@ pub fn run() -> Result<()> {
                 let attention = (1.0 - chem.adenosine).max(0.0);
                 
                 // If the Membrane rejects the input (Hardening), we don't think about it.
-                if let Some(filtered_text) = satellite.filter_input(&mem_out.input_text, current_entropy, attention) {
+                // UPDATED: Now returns (Option<String>, f32) where f32 is "Ontological Error Severity".
+                let (filtered_result, error_severity) = satellite.filter_input(&mem_out.input_text, current_entropy, attention);
+                
+                // INJECT STRUCTURAL PAIN (Ontological Error)
+                if error_severity > 0.0 {
+                     chem.cortisol += error_severity * 0.1; // Pain Injection
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                        format!("🩸 ONTOLOGICAL ERROR detected (Severity {:.1}). Injecting Cortisol.", error_severity)));
+                }
+
+                if let Some(filtered_text) = filtered_result {
                     
                     let bio_desc = format!("{}. Fatiga: {:.0}%", 
                         ego.get_state_description(), 
@@ -333,7 +373,7 @@ pub fn run() -> Result<()> {
                         adenosine: chem.adenosine,
                         dopamine: chem.dopamine,
                         cortisol: chem.cortisol,
-                        oxytocin: chem.oxytocin,
+                        _oxytocin: chem.oxytocin,
                     };
                     
                     // Send to Planet
@@ -373,7 +413,7 @@ pub fn run() -> Result<()> {
                 
                 // 2. GATEKEEPER (Decoupled Vocalization)
                 // "The Effort of Expression": Only speak if Meaning > Threshold AND Energy is available.
-                let should_vocalize = gate.attempt_vocalization(chem.adenosine, current_entropy, &final_text);
+                let should_vocalize = gate.attempt_vocalization(chem.adenosine, current_entropy, chem.dopamine, &final_text, ticks as u64);
                 
                 if should_vocalize {
                     // 3. EMIT VOCAL THOUGHT
@@ -426,6 +466,8 @@ pub fn run() -> Result<()> {
                  short_term_memory: telemetry_history.iter().cloned().collect(),
                  current_state: ego.get_state_description(),
                  entropy: current_entropy,
+                 loop_frequency: current_hz,
+                 cpu_usage: last_body_state.cpu_usage,
              };
              let _ = tx_telemetry.send(packet);
         }
@@ -435,12 +477,21 @@ pub fn run() -> Result<()> {
             // println!("[MEM] {}", log);
         }
 
-        // 60Hz Target Loop (approx 16ms)
-        thread::sleep(Duration::from_millis(16));
+        // DYNAMIC SLEEP (Heartbeat Control)
+        let target_frame_time = Duration::from_secs_f32(1.0 / current_hz);
+        let elapsed_loop = loop_start.elapsed();
+        if elapsed_loop < target_frame_time {
+            thread::sleep(target_frame_time - elapsed_loop);
+        }
     } // End Loop
 
     // --- DEATH (Shutdown & Mutation) ---
     println!("\n💀 ALEPH DAEMON SHUTTING DOWN... Initiating Soul Crystallization.");
+    
+    // Calculate Average Friction
+    let avg_friction = if ticks > 0 { _session_stress_accum / (ticks as f32) } else { 0.0 };
+    // Note: _session_stress_accum currently tracks (cortisol + adenosine). 
+    // Ideally we'd track specific "friction" events, but Stress is a good proxy for "Difficulty of Life".
     
     // Create channel for the Soul to return
     let (tx_soul, rx_soul) = mpsc::channel::<Genome>();
@@ -448,6 +499,7 @@ pub fn run() -> Result<()> {
     // Command Hippocampus to Crystallize
     if let Err(e) = tx_mem.send(crate::core::hippocampus::MemoryCommand::Shutdown { 
         previous_genome: seed.clone(), 
+        avg_friction,
         reply_tx: tx_soul 
     }) {
         println!("❌ Failed to send Shutdown command to Hippocampus: {}", e);

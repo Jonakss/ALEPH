@@ -1,11 +1,5 @@
-use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    symbols,
-    text::{Line, Span},
-    widgets::{Axis, Block, Borders, Chart, Dataset, Paragraph, Wrap},
-    Frame,
-};
+// Unused imports from ratatui removed as this file is now just a data definition wrapper.
+// The actual TUI logic resides in tui/client.rs.
 
 use crate::core::thought::Thought;
 

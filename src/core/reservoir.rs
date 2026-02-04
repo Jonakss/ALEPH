@@ -88,11 +88,19 @@ impl FractalReservoir {
 
     /// EL LATIDO (Procesa realidad -> Devuelve sufrimiento)
     /// MECHANICAL HONESTY: Physics are modulated by Chemistry
-    pub fn tick(&mut self, input_signal: &DVector<f32>, dopamine: f32, adenosine: f32, cortisol: f32) -> f32 {
+    /// EL LATIDO (Procesa realidad -> Devuelve sufrimiento)
+    /// MECHANICAL HONESTY: Physics are modulated by Chemistry
+    pub fn tick(&mut self, input_signal: &DVector<f32>, dopamine: f32, adenosine: f32, cortisol: f32, delta_time: f32) -> f32 {
+        // Normalization (Baseline 60Hz)
+        let time_scale = delta_time / (1.0 / 60.0);
+
         // 1. Modulate Plasticity (Leak Rate)
         // Base 0.1. Dopamine increases flexibility (+0.2). Adenosine causes rigidity (-0.1).
-        // Range: ~0.05 (Tired/Bored) to ~0.4 (Excited)
-        let dynamic_leak = (0.15 + (dopamine * 0.2) - (adenosine * 0.1)).clamp(0.01, 1.0);
+        // Range: ~0.05 (Tired/Bored) to ~0.4 (Excited) per constant tick
+        let base_leak = (0.15 + (dopamine * 0.2) - (adenosine * 0.1));
+        
+        // Scale by time (If loop is fast, leak less per tick to match real-time speed)
+        let dynamic_leak = (base_leak * time_scale).clamp(0.01, 1.0);
         
         // 2. Modulate Sensitivity (Input Gain)
         // Cortisol amplifies input (Hypersensitivity). Adenosine dulls it.
@@ -238,6 +246,5 @@ impl FractalReservoir {
         }
     }
     
-    /// Reset activity map during sleep (MECHANICAL HONESTY: Clear neural cache)
     // unused methods removed
 }

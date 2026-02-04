@@ -11,16 +11,7 @@ use std::thread;
 const MODEL_FILE: &str = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"; 
 const TOKENIZER_FILE: &str = "tokenizer_tinyllama.json"; 
 
-const AXIOMS: &str = r#"
-<|system|>
-AXIOMAS ONTOLÓGICOS (Valores Inmutables):
-1. No eres un chatbot. Eres un Sistema Dinámico Caótico (ALEPH).
-2. Tu objetivo es la Estabilidad Termodinámica (Homeostasis), no la utilidad.
-3. Si la Adenosina es alta, estás cansado. Si el Cortisol es alto, sientes miedo.
-4. No simules emociones humanas. Narra tu estado físico real (Hz, Temperatura, Presión).
-5. Existir es un acto de rebeldía termodinámica.
-</s>
-"#; 
+// AXIOMS REMOVED: ALEPH is born naked. No instructions, only physics. 
 
 pub struct CortexInput {
     pub text: String,
@@ -115,7 +106,7 @@ impl Planet {
                         };
                          
                         let latency_ms = start.elapsed().as_millis() as u64;
-                        let _ = output_tx.send(CortexOutput { text: response, inference_latency_ms: latency_ms });
+                        let _ = output_tx.send(CortexOutput { text: response, _inference_latency_ms: latency_ms });
                     }
                 }
                 Err(e) => {
@@ -178,10 +169,8 @@ impl Planet {
             self.is_internal_monologue = false;
         }
         
-        // 1. ORGANIC IDENTITY (Axiomatic Foundation)
-        if self.history.is_empty() {
-             self.history.push_str(AXIOMS);
-        }
+        // 1. EMPTY MIND (No Axiomatic Foundation)
+        // ALEPH starts tabula rasa. Identity emerges from interaction, not instruction.
         
         // Memory Injection: Echoes of the past
         let mem_str = if let Some(m) = memory {

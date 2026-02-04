@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::io::{self, Read, Write};
+use rand::Rng; // For Glitching
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 use crate::core::ipc::AlephPacket;
@@ -38,7 +39,7 @@ pub fn run() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     let mut last_tick = std::time::Instant::now();
     let mut frames = 0;
-    let mut fps = 0.0;
+    let mut _fps = 0.0;
     let _start_time = std::time::Instant::now();
     let mut entropy_history: Vec<(f64, f64)> = Vec::new();
     let _window_width = 60.0; // 60 seconds of history
@@ -73,6 +74,8 @@ pub fn run() -> Result<()> {
         reservoir_activity: vec![0.0; 500],
         short_term_memory: vec!["Connecting...".to_string()],
         current_state: "Unknown".to_string(),
+        loop_frequency: 60.0,
+        cpu_usage: 0.0,
     };
     
     // Input Buffer
@@ -124,6 +127,8 @@ pub fn run() -> Result<()> {
                                             short_term_memory: short_term_memory.clone(),
                                             current_state: format!("JSON ERR: {}", e),
                                             entropy: 0.0, // Placeholder
+                                            loop_frequency: 60.0,
+                                            cpu_usage: 0.0,
                                         };
                                     }
                                 }
@@ -143,7 +148,7 @@ pub fn run() -> Result<()> {
         // Calculate FPS
         frames += 1;
         if last_tick.elapsed().as_secs_f32() >= 1.0 {
-            fps = frames as f32 / last_tick.elapsed().as_secs_f32();
+            _fps = frames as f32 / last_tick.elapsed().as_secs_f32();
             frames = 0;
             last_tick = std::time::Instant::now();
         }
@@ -165,10 +170,10 @@ pub fn run() -> Result<()> {
                 .split(f.size());
 
             // 0. Extract Data First
-            let (aden, cort, dopa, oxy, spec, neurons) = match &last_packet {
-                AlephPacket::Telemetry { adenosine, cortisol, dopamine, oxytocin, audio_spectrum, reservoir_activity, .. } => 
-                    (*adenosine, *cortisol, *dopamine, *oxytocin, audio_spectrum.clone(), reservoir_activity.clone()),
-                _ => (0.0, 0.0, 0.0, 0.0, AudioSpectrum::default(), vec![]),
+            let (aden, cort, dopa, oxy, spec, neurons, current_hz) = match &last_packet {
+                AlephPacket::Telemetry { adenosine, cortisol, dopamine, oxytocin, audio_spectrum, reservoir_activity, loop_frequency, .. } => 
+                    (*adenosine, *cortisol, *dopamine, *oxytocin, audio_spectrum.clone(), reservoir_activity.clone(), *loop_frequency),
+                _ => (0.0, 0.0, 0.0, 0.0, AudioSpectrum::default(), vec![], 60.0),
             };
             
             // Audio Logic
@@ -203,7 +208,7 @@ pub fn run() -> Result<()> {
             };
             
             let title_text = format!("ALEPH v2.0 | {} Hz | ST: {} | EAR: {} ({:.4})", 
-                fps as u32, status_trimmed, hearing_status, spec.rms);
+                current_hz as u32, status_trimmed, hearing_status, spec.rms);
             
             // Generate Avatar
             // We need to construct a temp struct for the helper or update the helper.
@@ -277,9 +282,39 @@ pub fn run() -> Result<()> {
 
             // Narrative Stream (Chat Style: Oldest Top, Newest Bottom)
             let messages: Vec<ListItem> = match &last_packet {
-                AlephPacket::Telemetry { short_term_memory, .. } => {
-                    short_term_memory.iter().map(|m| {
-                         ListItem::new(Line::from(vec![Span::raw(m)]))
+                AlephPacket::Telemetry { short_term_memory, adenosine, cortisol, .. } => {
+                    let mut rng = rand::thread_rng();
+                    short_term_memory.iter().enumerate().map(|(i, m)| {
+                         // 1. FADING (Adenosine)
+                         // Older messages fade more? Or global fatigue fades everything?
+                         // "Global Fatigue": High Adenosine dims the entire consciousness stream.
+                         // But also, older memories drift into the dark.
+                         
+                         let fatigue_dim = (1.0 - *adenosine).max(0.2); // 1.0 -> 0.2 brightness
+                         // Also fade based on index (older = dimmer)
+                         let recency = (i as f32) / (short_term_memory.len() as f32).max(1.0);
+                         let brightness = (fatigue_dim * recency).clamp(0.2, 1.0);
+                         
+                         let color_val = (255.0 * brightness) as u8;
+                         let base_color = Color::Rgb(color_val, color_val, color_val);
+                         
+                         // 2. GLITCHING (Cortisol / Structural Tremor)
+                         // If cortisol is high, text characters might "shift".
+                         let display_text = if *cortisol > 0.3 && rng.gen::<f32>() < (*cortisol - 0.3) {
+                             // Glitch: Replace random chars
+                             m.chars().map(|c| {
+                                 if rng.gen::<f32>() < 0.1 {
+                                     let glitches = ['!', '?', '#', '@', '%', '&', '*', '0', '1'];
+                                     glitches[rng.gen_range(0..glitches.len())]
+                                 } else {
+                                     c
+                                 }
+                             }).collect::<String>()
+                         } else {
+                             m.clone()
+                         };
+
+                         ListItem::new(Line::from(vec![Span::styled(display_text, Style::default().fg(base_color))]))
                     }).collect()
                 },
                 _ => vec![],

@@ -15,3 +15,4 @@ pub mod satellite; // THE OBSERVER
 pub mod ipc; // THE NERVOUS SYSTEM
 pub mod materializer; // THE EIGEN-SOUL
 pub mod gate;
+pub mod field; // THE SEMANTIC FIELD (RAG as Probability Deformation)

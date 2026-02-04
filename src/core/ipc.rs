@@ -23,6 +23,10 @@ pub enum AlephPacket {
         short_term_memory: Vec<String>, // Last few thoughts
         current_state: String, // "Dreaming", "Alert", "Panic"
         entropy: f32, // Added for TUI Chart
+        
+        // System
+        loop_frequency: f32, // Actual Backend Hz
+        cpu_usage: f32,      // Hardware Load
     },
     
     /// Client -> Daemon: Perturbations

@@ -1,6 +1,7 @@
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::time::{Duration, Instant};
 
+#[allow(dead_code)]
 pub struct ActivityMonitor {
     device_state: DeviceState,
     last_activity: Instant,

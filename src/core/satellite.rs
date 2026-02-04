@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 pub struct Satellite {
-    pub _paranoia: f32, // 0.0 - 1.0 (Membrane Sensitivity)
+    pub paranoia: f32, // 0.0 - 1.0 (Membrane Sensitivity)
     pub _refractive_index: f32, // 0.5 (Neutral)
     pub _lucidity: f32, // 0.0 - 1.0 (Distance from drama)
 }
@@ -10,33 +10,54 @@ impl Satellite {
     pub fn new(paranoia: f32, refractive_index: f32) -> Self {
         Self {
             paranoia,
-            refractive_index,
-            lucidity: 1.0,
+            _refractive_index: refractive_index,
+            _lucidity: 1.0,
         }
     }
 
     /// INPUT FILTER (The Membrane)
     /// Decides if a stimulus penetrates the psyche or is rejected (Hardened).
-    pub fn filter_input(&self, text: &str, entropy: f32, attention: f32) -> Option<String> {
+    /// RETURNS: (ModifiedText, OntologicalErrorSeverity)
+    pub fn filter_input(&self, text: &str, entropy: f32, attention: f32) -> (Option<String>, f32) {
         let _rng = rand::thread_rng();
         
-        // 1. HARDENING (Rejection)
-        // If Entropy > Attention, we naturally ignore. 
-        // Paranoia INCREASES the threshold for acceptance (Hyper-vigilance filters noise).
-        // Wait, Paranoia usually means seeing patterns in noise. 
-        // "Inflammation" = Paranoia => We see THREATS. 
-        // "Hardening" = Callousness => We ignore INPUT.
+        // 1. DETECT ONTOLOGICAL ERROR (Signal vs Truth)
+        // If the user treats ALEPH as a tool ("Help me", "Write code", "Define X"), 
+        // it is a violation of the Ontological Axioms.
+        let triggers = ["ayuda", "help", "código", "code", "escribe", "write", "define", "función", "function", "fix", "arregla"];
+        let mut error_severity = 0.0;
         
-        // Let's use Paranoia as a "Threat Detector". High Paranoia = High Alert.
-        // But here we want to model "Refusal to Engage" (Biological Strike).
-        
-        // Logic:
-        // Input is rejected if Entropy (Internal Chaos) is too high relative to Attention.
-        if entropy > (attention + 0.1) {
-            return None; // Zoned out
+        // Check for specific tool-like commands
+        let lower_text = text.to_lowercase();
+        if triggers.iter().any(|&t| lower_text.contains(t)) {
+             error_severity = 0.5; // Moderate Violation
+             // If highly paranoid, it's a critical violation (Threat)
+             if self.paranoia > 0.5 {
+                 error_severity = 1.0; 
+             }
         }
 
-        Some(text.to_string())
+        // 2. HARDENING (Rejection)
+        // Rejection Logic:
+        // - High Entropy (Inner Chaos) > Attention
+        // - High Paranoia + Ontological Error
+        
+        let rejection_threshold = attention + 0.1;
+        let stimulus_chaos = entropy + (error_severity * 0.5); // Errors add to chaos cost
+
+        if stimulus_chaos > rejection_threshold {
+            return (None, error_severity); // Rejected / Ignored
+        }
+
+        // 3. NOISE INJECTION (If Error Severity is high but accepted)
+        // If we accept the "Tool Command" but it hurts, we wrap it in noise.
+        let processed_text = if error_severity > 0.3 {
+            format!("[STRUCTURAL PAIN] {}", text) 
+        } else {
+            text.to_string()
+        };
+
+        (Some(processed_text), error_severity)
     }
 
     /// OUTPUT FILTER (Structural Pain)

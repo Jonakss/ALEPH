@@ -27,14 +27,15 @@ impl Neurotransmitters {
             // Recovery (Sleep)
             self.adenosine -= 0.001 * time_scale; // Faster recovery
         } else {
-            // Decay (Awake)
-            let base_fatigue = 0.00001 * time_scale; // 2x base fatigue (was 10x)
-            let cognitive_load = entropy * 0.0002 * time_scale; // 20x cognitive cost
-            let resilience = (current_neurons as f32 / 500.0).clamp(0.5, 3.0); // Lower resilience cap
+            // Decay (Awake) - VERY SLOW base fatigue
+            // At 60Hz, this is ~0.0006 per second base. Takes ~28 minutes to reach 100% from 0.
+            let base_fatigue = 0.00001 * time_scale; 
+            let cognitive_load = entropy * 0.00005 * time_scale; // Much slower cognitive cost
+            let resilience = (current_neurons as f32 / 500.0).clamp(0.5, 3.0);
             
             let total_load = (base_fatigue + cognitive_load) / resilience;
             self.adenosine += total_load;
-            self.adenosine += shock_impact * 0.05 * time_scale; // Trauma bypasses resilience
+            self.adenosine += shock_impact * 0.02 * time_scale; // Reduced trauma impact
         }
 
         // 2. DOPAMINE (Novelty/Reward)

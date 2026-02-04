@@ -58,7 +58,5 @@ impl Genome {
         Ok(())
     }
 
-    /// Mutate traits based on the "Life Summary" of the previous session
-    /// Called upon "Death" (Shutdown)
     // mutate removed (unused)
 }
