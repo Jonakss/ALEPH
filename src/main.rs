@@ -21,8 +21,7 @@ async fn main() -> Result<(), anyhow::Error> {
         "view" | "tui" => {
             // THE TELESCOPE (Visualizer)
             println!("🔭 Connecting to ALEPH Star System...");
-            // TODO: Implement Client/TUI connector
-            println!("🔭 Telescope under construction."); 
+            tui::client::run()?;  
         },
         _ => {
             eprintln!("Unknown mode: {}", mode);

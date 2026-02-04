@@ -1,6 +1,18 @@
 use nalgebra::{DMatrix, DVector};
 use rand::prelude::*;
 use rand_distr::{Normal, Uniform};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
+
+#[derive(Serialize, Deserialize)]
+struct PersistentReservoir {
+    weights_data: Vec<f32>,
+    state_data: Vec<f32>,
+    activity_data: Vec<f32>,
+    size: usize,
+    leak_rate: f32,
+}
 
 /// EL EGO FRACTAL
 /// Estructura dinámica que busca minimizar su propia varianza (entropía).
@@ -35,6 +47,45 @@ impl FractalReservoir {
             state: DVector::zeros(size),
             _leak_rate: 0.2, // 20% novedad, 80% memoria
             activity_map: DVector::zeros(size),
+        }
+    }
+
+    /// Load from disk or create brand new if not found
+    pub fn load(size: usize, sparsity: f32) -> Self {
+        if let Ok(data) = fs::read_to_string("reservoir.json") {
+            if let Ok(dto) = serde_json::from_str::<PersistentReservoir>(&data) {
+                // Validate size
+                if dto.size == size {
+                     println!("🔹 Neocortex Restored: {} neurons loaded.", dto.size);
+                     return Self {
+                         internal_weights: DMatrix::from_vec(size, size, dto.weights_data),
+                         state: DVector::from_vec(dto.state_data),
+                         _leak_rate: dto.leak_rate,
+                         activity_map: DVector::from_vec(dto.activity_data),
+                     };
+                } else {
+                    println!("⚠️ Neocortex Mismatch (Loaded {}, Requested {}). Rebuilding...", dto.size, size);
+                }
+            }
+        }
+        
+        println!("✨ Creating New Neocortex...");
+        Self::new(size, sparsity)
+    }
+
+    pub fn save(&self) {
+        let size = self.current_size();
+        let dto = PersistentReservoir {
+            weights_data: self.internal_weights.as_slice().to_vec(),
+            state_data: self.state.as_slice().to_vec(),
+            activity_data: self.activity_map.as_slice().to_vec(),
+            size,
+            leak_rate: self._leak_rate,
+        };
+        
+        if let Ok(json) = serde_json::to_string(&dto) {
+            let _ = fs::write("reservoir.json", json);
+            println!("💾 Neocortex Saved ({} neurons).", size);
         }
     }
 

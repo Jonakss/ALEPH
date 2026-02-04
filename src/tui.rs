@@ -55,6 +55,7 @@ impl Default for Telemetry {
     }
 }
 
+pub mod client;
 mod avatar;
 mod monologue;
 

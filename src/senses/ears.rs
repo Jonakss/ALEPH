@@ -1,12 +1,13 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use serde::{Serialize, Deserialize};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 use crate::core::thought::{Thought, MindVoice};
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::io::Write;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AudioSpectrum {
     pub rms: f32,
     pub bass: f32, // 20-250 Hz

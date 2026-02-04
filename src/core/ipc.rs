@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::senses::ears::AudioSpectrum;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum AlephPacket {
@@ -8,6 +9,9 @@ pub enum AlephPacket {
         adenosine: f32,
         cortisol: f32,
         dopamine: f32,
+        
+        // Sensory
+        audio_spectrum: AudioSpectrum,
         
         // Proprioception
         heart_rate: f32, // Derived from CPU

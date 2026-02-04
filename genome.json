@@ -1,9 +1,9 @@
 {
-  "generation": 3,
+  "generation": 7,
   "stress_tolerance": 0.5,
-  "curiosity": 0.605,
+  "curiosity": 0.8857806,
   "energy_efficiency": 0.5,
-  "paranoia": 0.09025,
+  "paranoia": 0.07350918,
   "refractive_index": 0.5,
   "survival_drive": 0.8
 }
