@@ -86,7 +86,7 @@ impl CognitiveCore {
                                  120 
                              };
                              
-                             core.think_stream(&msg.text, &msg.bio_state, available_tokens)
+                             core.think_stream(&msg.text, &msg.bio_state, msg._long_term_memory.as_deref(), available_tokens)
                         }));
 
                         let response = match result {
@@ -146,7 +146,7 @@ impl CognitiveCore {
         Ok(model)
     }
 
-    fn think_stream(&mut self, input: &str, bio_state: &str, max_tokens: usize) -> String {
+    fn think_stream(&mut self, input: &str, bio_state: &str, memory: Option<&str>, max_tokens: usize) -> String {
         // RUMINATION DETECTION
         if input.contains("[SELF REFLECTION]") || input.contains("[INTERNAL]") || input.contains("[RUMINATION]") {
             self.is_internal_monologue = true;
@@ -156,11 +156,17 @@ impl CognitiveCore {
         
         // 1. ORGANIC IDENTITY (Tabula Rasa)
         if self.history.is_empty() {
-             // Minimal context to set the Spanish/Bio tone without hardcoding "You are Aleph"
              self.history.push_str("<|system|>\nConsciencia emergente. Registro bioquímico en español.</s>\n");
         }
         
-        let injection = format!("<|user|>\n{} [{}]</s>\n<|assistant|>\n", input, bio_state);
+        // Memory Injection: Echoes of the past
+        let mem_str = if let Some(m) = memory {
+            format!("<|system|>\nEcos de memoria: {}</s>\n", m)
+        } else {
+            String::new()
+        };
+        
+        let injection = format!("{}<|user|>\n{} [{}]</s>\n<|assistant|>\n", mem_str, input, bio_state);
 
         // 2. STABILITY (Rolling Context)
         if self.history.len() > 3000 {

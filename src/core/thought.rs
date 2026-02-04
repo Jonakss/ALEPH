@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MindVoice {
     Sensory, // [EAR], [BODY] - Cyan
     Cortex,  // [BROCA], [WERNICKE], [THINK] - Green

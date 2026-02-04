@@ -664,6 +664,7 @@ async fn run_headless() -> Result<(), anyhow::Error> {
     // Background thought printer
     let printer_rx = rx_thoughts;
     thread::spawn(move || {
+        let mut last_was_vocal = false;
         while let Ok(thought) = printer_rx.recv() {
             let label = match thought.voice {
                 MindVoice::Cortex => "🧠 CORTEX",
@@ -672,17 +673,33 @@ async fn run_headless() -> Result<(), anyhow::Error> {
                 MindVoice::Chem => "🧪 BIO",
                 MindVoice::Sensory => "👂 EAR",
             };
+            
             if thought.text.trim().is_empty() { continue; }
-            println!("\n[{}] {}", label, thought.text);
-            print!("> ");
-            let _ = io::stdout().flush();
+
+            if thought.voice == MindVoice::Vocal {
+                if !last_was_vocal {
+                    print!("\n[{}] ", label);
+                }
+                print!("{}", thought.text);
+                let _ = io::stdout().flush();
+                last_was_vocal = true;
+            } else {
+                if last_was_vocal { println!(); }
+                println!("\n[{}] {}", label, thought.text);
+                print!("> ");
+                let _ = io::stdout().flush();
+                last_was_vocal = false;
+            }
         }
     });
 
     // Spawn Hippocampus (Memory)
-    let (tx_mem, _rx_mem_stats, _rx_mem_log) = core::hippocampus::Hippocampus::spawn()?;
+    let (tx_mem, rx_mem_out, _rx_mem_log) = core::hippocampus::Hippocampus::spawn()?;
+    
+    // Spawn Ego (Fractal Reservoir)
+    let mut ego = FractalReservoir::new(500, 0.2);
 
-    let (tx_cortex, _rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
+    let (tx_cortex, rx_cortex_out) = match CognitiveCore::spawn(tx_thoughts.clone()) {
         Ok((tx, rx)) => {
             println!("✅ Neocortex ONLINE");
             (Some(tx), Some(rx))
@@ -731,35 +748,47 @@ async fn run_headless() -> Result<(), anyhow::Error> {
             continue;
         }
         
-        // Send to LLM
+        // 1. Send to memory first (RAG)
+        let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
+            text: input.clone(), 
+            entropy: 0.5 
+        });
+
+        // 2. Wait for retrieval (Conjunction)
+        let mut mem_context = None;
+        if let Ok(mem_out) = rx_mem_out.recv_timeout(Duration::from_millis(500)) {
+            mem_context = mem_out.retrieval.map(|(ctx, _)| ctx);
+            // Tick the reservoir with the novelty/input
+            let input_signal = DVector::from_element(500, mem_out.novelty);
+            let chem = chemistry.lock().unwrap();
+            ego.tick(&input_signal, chem.dopamine, chem.adenosine, chem.cortisol);
+        }
+
+        // 3. Send to LLM
         if let Some(ref tx) = tx_cortex {
             let bio_desc = {
                 let chem = chemistry.lock().unwrap();
-                format!("A: {:.2} D: {:.2} C: {:.2}", chem.adenosine, chem.dopamine, chem.cortisol)
+                format!("{}. [A: {:.2} D: {:.2} C: {:.2}]", 
+                    ego.get_state_description(),
+                    chem.adenosine, chem.dopamine, chem.cortisol)
             };
             let aden = chemistry.lock().unwrap().adenosine;
             
             let _ = tx.send(CortexInput {
                 text: input.clone(),
                 _somatic_state: String::new(),
-                _long_term_memory: None,
+                _long_term_memory: mem_context,
                 bio_state: bio_desc,
                 _cognitive_impairment: 0.0,
                 _cpu_load: 0.0,
                 _ram_pressure: 0.0,
-                entropy: 0.2, // Headless base
+                entropy: 0.2, 
                 adenosine: aden,
-            });
-            
-            // Send to memory too
-            let _ = tx_mem.send(core::hippocampus::MemoryCommand::ProcessStimulus { 
-                text: input, 
-                entropy: 0.5 
             });
         }
         
-        // Wait for and print the final consolidated response
-        if let Some(ref rx) = _rx_cortex_out {
+        // 4. Wait for and print the final consolidated response
+        if let Some(ref rx) = rx_cortex_out {
              match rx.recv_timeout(Duration::from_secs(60)) {
                  Ok(output) => {
                      println!("\n[🧠 ALEPH FINAL] {}\n", output.text);
