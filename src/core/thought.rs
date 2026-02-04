@@ -25,4 +25,14 @@ impl Thought {
             timestamp: Instant::now(),
         }
     }
+
+    pub fn voice_label(&self) -> &str {
+        match self.voice {
+            MindVoice::Sensory => "EAR",
+            MindVoice::Cortex => "PLANET",
+            MindVoice::Chem => "STAR",
+            MindVoice::System => "SYS",
+            MindVoice::Vocal => "VOCAL",
+        }
+    }
 }

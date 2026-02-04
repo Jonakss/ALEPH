@@ -62,7 +62,7 @@ impl VectorStore {
             file_path: "memories.json".to_string(),
         };
         
-        store.load_from_disk();
+        // store.load_from_disk(); // EGO DEATH: We do not load past lives.
         // println!("🧠 Hippocampus Loaded: {} memories.", store.memories.len());
         
         Ok(store)

@@ -28,7 +28,7 @@ pub struct CortexOutput {
     pub inference_latency_ms: u64,
 }
 
-pub struct CognitiveCore {
+pub struct Planet {
     model: Llama,
     tokenizer: Tokenizer,
     device: Device,
@@ -41,7 +41,7 @@ pub struct CognitiveCore {
     is_internal_monologue: bool,
 }
 
-impl CognitiveCore {
+impl Planet {
     pub fn spawn(thought_tx: Sender<Thought>) -> Result<(Sender<CortexInput>, Receiver<CortexOutput>)> {
         let (input_tx, input_rx) = channel::<CortexInput>();
         let (output_tx, output_rx) = channel::<CortexOutput>();
@@ -50,7 +50,7 @@ impl CognitiveCore {
         thread::spawn(move || {
             match Self::new(thread_thought_tx.clone()) {
                 Ok(mut core) => {
-                    let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "🧠 Cortex (TinyLlama): ONLINE (Stream Mode)".to_string()));
+                    let _ = thread_thought_tx.send(Thought::new(MindVoice::System, "🪐 Planet (Narrative Engine): ONLINE (Stream Mode)".to_string()));
                     
                     loop {
                         let msg = match input_rx.recv() {

@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 
 use crate::core::thought::{Thought, MindVoice};
-use crate::core::llm::CortexInput;
+use crate::core::planet::CortexInput;
 // use rand::Rng; 
 
 /// Inner Voice - Silent rumination thread
