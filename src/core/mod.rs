@@ -12,3 +12,4 @@ pub mod inner_voice;
 pub mod daemon; // THE STAR
 pub mod genome; // THE SEED
 pub mod satellite; // THE OBSERVER
+pub mod ipc; // THE NERVOUS SYSTEM
