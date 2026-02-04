@@ -54,7 +54,7 @@ impl VectorStore {
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DType::F32, &device)? };
         let model = BertModel::load(vb, &config)?;
 
-        let mut store = Self {
+        let store = Self {
             memories: Vec::new(),
             model,
             tokenizer,
@@ -214,16 +214,42 @@ impl VectorStore {
         self.save_to_disk()
     }
 
-    fn load_from_disk(&mut self) {
-        if let Ok(content) = fs::read_to_string(&self.file_path) {
-            if let Ok(memories) = serde_json::from_str(&content) {
-                self.memories = memories;
-                // Ensure loaded memories are marked consolidated
-                for m in &mut self.memories { m.consolidated = true; }
-            }
-        }
-    }
+    // load_from_disk removed (unused)
     pub fn memory_count(&self) -> usize {
         self.memories.len()
+    }
+
+    /// Calculates Centroid (Mean Vector) and Variance (Spread) of all memories.
+    /// Used by SoulMaterializer for crystallization.
+    pub fn calculate_stats(&self) -> (Vec<f32>, f32) {
+        if self.memories.is_empty() {
+            return (vec![], 0.0);
+        }
+
+        let dim = self.memories[0].embedding.len();
+        let mut sum_vec = vec![0.0; dim];
+        
+        // 1. Calculate Centroid
+        for mem in &self.memories {
+            for (i, val) in mem.embedding.iter().enumerate() {
+                sum_vec[i] += val;
+            }
+        }
+        
+        let count = self.memories.len() as f32;
+        let centroid: Vec<f32> = sum_vec.iter().map(|&x| x / count).collect();
+
+        // 2. Calculate Variance (Average Euclidean Distance from Centroid)
+        let mut total_dist_sq = 0.0;
+        for mem in &self.memories {
+            let dist_sq: f32 = mem.embedding.iter().zip(&centroid)
+                .map(|(a, b)| (a - b).powi(2))
+                .sum();
+            total_dist_sq += dist_sq.sqrt(); // Sum of distances (not squared) to be intuitive "Spread"
+        }
+        
+        let variance = total_dist_sq / count;
+
+        (centroid, variance)
     }
 }

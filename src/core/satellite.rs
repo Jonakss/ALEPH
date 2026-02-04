@@ -1,11 +1,9 @@
-use rand::Rng;
 use std::time::Duration;
-use crate::core::thought::{Thought, MindVoice};
 
 pub struct Satellite {
-    pub paranoia: f32, // 0.0 - 1.0 (Membrane Sensitivity)
-    pub refractive_index: f32, // 0.5 (Neutral)
-    pub lucidity: f32, // 0.0 - 1.0 (Distance from drama)
+    pub _paranoia: f32, // 0.0 - 1.0 (Membrane Sensitivity)
+    pub _refractive_index: f32, // 0.5 (Neutral)
+    pub _lucidity: f32, // 0.0 - 1.0 (Distance from drama)
 }
 
 impl Satellite {
@@ -20,7 +18,7 @@ impl Satellite {
     /// INPUT FILTER (The Membrane)
     /// Decides if a stimulus penetrates the psyche or is rejected (Hardened).
     pub fn filter_input(&self, text: &str, entropy: f32, attention: f32) -> Option<String> {
-        let mut rng = rand::thread_rng();
+        let _rng = rand::thread_rng();
         
         // 1. HARDENING (Rejection)
         // If Entropy > Attention, we naturally ignore. 

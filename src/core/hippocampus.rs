@@ -1,4 +1,6 @@
 use crate::core::memory_vector::VectorStore;
+use crate::core::genome::Genome;
+use crate::core::materializer::SoulMaterializer;
 use anyhow::Result;
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::thread;
@@ -7,8 +9,8 @@ pub struct MemoryOutput {
     pub input_text: String,
     pub novelty: f32, // 0.0 - 1.0 (1.0 = New)
     pub retrieval: Option<(String, f32)>, // (Context, Relevance)
-    pub volatile_count: usize,
-    pub total_count: usize,
+    pub _volatile_count: usize,
+    pub _total_count: usize,
 }
 
 pub enum MemoryCommand {
@@ -16,6 +18,7 @@ pub enum MemoryCommand {
     ConsolidateSleep,
     #[allow(dead_code)]
     ForceSave, // Optional, but we prefer Sleep-based persistence
+    Shutdown { previous_genome: Genome, reply_tx: Sender<Genome> },
 }
 
 pub struct Hippocampus {
@@ -68,6 +71,18 @@ impl Hippocampus {
                     },
                     MemoryCommand::ForceSave => {
                         let _ = hippo.store.save(); // Just in case
+                    },
+                    MemoryCommand::Shutdown { previous_genome, reply_tx } => {
+                        let _ = log_tx.send("💀 Hippocampus: Shutting down... Crystallizing Soul.".to_string());
+                        
+                        // 1. Crystallize
+                        let new_genome = SoulMaterializer::crystallize(&hippo.store, previous_genome);
+                        
+                        // 2. Reply
+                        let _ = reply_tx.send(new_genome);
+                        
+                        // 3. Die
+                        break; 
                     }
                 }
             }
@@ -124,8 +139,8 @@ impl Hippocampus {
             input_text: text,
             novelty,
             retrieval,
-            volatile_count: self.store.volatile_count(),
-            total_count: self.store.memory_count(),
+            _volatile_count: self.store.volatile_count(),
+            _total_count: self.store.memory_count(),
         })
     }
 }

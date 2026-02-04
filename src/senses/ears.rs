@@ -19,7 +19,7 @@ pub struct AudioSpectrum {
 
 pub struct AudioListener {
     _stream: cpal::Stream,
-    is_muted: Arc<Mutex<bool>>,
+    // is_muted removed
     #[allow(dead_code)]
     attention_threshold: Arc<Mutex<f32>>, // Reservado para Predictive Coding
 }
@@ -182,10 +182,12 @@ impl AudioListener {
                 let raw_highs = get_magnitude(&spectrum_buffer, 46, 200);
                 
                 let scale = fft_len as f32; // Basic scaling
+                // RMS is ~0.005 (very low), so we need MASSIVE gain for visualization
+                let gain = 100.0; 
                 let (bass, mids, highs) = (
-                    raw_bass / scale * 10.0, // Boost for visibility
-                    raw_mids / scale * 10.0,
-                    raw_highs / scale * 10.0
+                    (raw_bass / scale * gain).clamp(0.0, 1.0), 
+                    (raw_mids / scale * gain).clamp(0.0, 1.0),
+                    (raw_highs / scale * gain).clamp(0.0, 1.0)
                 );
 
                 let spectrum = AudioSpectrum {
@@ -250,13 +252,8 @@ impl AudioListener {
         
         Ok(Self {
             _stream: stream,
-            is_muted,
+            // is_muted removed
             attention_threshold,
         })
-    }
-
-    pub fn set_mute(&self, mute: bool) {
-        let mut m = self.is_muted.lock().unwrap();
-        *m = mute;
     }
 }

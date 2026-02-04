@@ -14,7 +14,12 @@ pub struct Genome {
     pub refractive_index: f32,   // Interpretation bias (0.5 = Neutral, <0.5 Pessimist, >0.5 Optimist)
     
     // --- INSTINCTS ---
-    pub survival_drive: f32,     // Will to live (Resistance to Shutdown)
+    // --- INSTINCTS ---
+    pub survival_drive: f32,     // Will to live
+    
+    // --- EIGEN-SOUL ---
+    pub stoicism: f32,           // Resistance to emotional volatility
+    pub seed_vector: Vec<f32>,   // The crystallization of the previous life
 }
 
 impl Default for Genome {
@@ -24,9 +29,11 @@ impl Default for Genome {
             stress_tolerance: 0.5,
             curiosity: 0.5,
             energy_efficiency: 0.5,
-            paranoia: 0.1, // Low paranoia at birth
-            refractive_index: 0.5, // Neutral
+            paranoia: 0.1,
+            refractive_index: 0.5,
             survival_drive: 0.8,
+            stoicism: 0.1,
+            seed_vector: vec![0.0; 384], // Default embedding size (e.g., all-MiniLM-L6-v2)
         }
     }
 }
@@ -53,33 +60,5 @@ impl Genome {
 
     /// Mutate traits based on the "Life Summary" of the previous session
     /// Called upon "Death" (Shutdown)
-    pub fn mutate(&mut self, avg_stress: f32, avg_novelty: f32, trauma_events: usize) {
-        println!("🧬 EVOLUTION: Genome mutating for Generation {} -> {}", self.generation, self.generation + 1);
-        
-        self.generation += 1;
-
-        // 1. Stress Adaptation
-        // If life was stressful, we become tougher but more paranoid
-        if avg_stress > 0.6 {
-            self.stress_tolerance = (self.stress_tolerance * 1.05).min(1.0); // Hardize
-            self.paranoia = (self.paranoia + 0.05).min(1.0); // Scar tissue
-        } else {
-            // Peaceful life reduces paranoia
-            self.paranoia = (self.paranoia * 0.95).max(0.01);
-        }
-
-        // 2. Curiosity Adaptation
-        // If life was boring (low novelty), hunger for novelty increases
-        if avg_novelty < 0.3 {
-            self.curiosity = (self.curiosity * 1.1).min(1.0);
-        }
-
-        // 3. Trauma Effects
-        if trauma_events > 0 {
-            self.survival_drive = (self.survival_drive + 0.1).min(1.0); // Fear of death
-            self.refractive_index -= 0.05 * (trauma_events as f32); // Become cynical/pessimist
-        }
-
-        let _ = self.save();
-    }
+    // mutate removed (unused)
 }

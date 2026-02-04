@@ -13,3 +13,5 @@ pub mod daemon; // THE STAR
 pub mod genome; // THE SEED
 pub mod satellite; // THE OBSERVER
 pub mod ipc; // THE NERVOUS SYSTEM
+pub mod materializer; // THE EIGEN-SOUL
+pub mod gate;

@@ -3,7 +3,6 @@ use rand::prelude::*;
 use rand_distr::{Normal, Uniform};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
 struct PersistentReservoir {
@@ -54,18 +53,16 @@ impl FractalReservoir {
     pub fn load(size: usize, sparsity: f32) -> Self {
         if let Ok(data) = fs::read_to_string("reservoir.json") {
             if let Ok(dto) = serde_json::from_str::<PersistentReservoir>(&data) {
-                // Validate size
-                if dto.size == size {
-                     println!("🔹 Neocortex Restored: {} neurons loaded.", dto.size);
-                     return Self {
-                         internal_weights: DMatrix::from_vec(size, size, dto.weights_data),
-                         state: DVector::from_vec(dto.state_data),
-                         _leak_rate: dto.leak_rate,
-                         activity_map: DVector::from_vec(dto.activity_data),
-                     };
-                } else {
-                    println!("⚠️ Neocortex Mismatch (Loaded {}, Requested {}). Rebuilding...", dto.size, size);
-                }
+                // TRUST THE SAVED BRAIN
+                // If the saved brain has grown (e.g. 505 neurons), we load it as is.
+                // We ignore the 'size' argument if a valid brain exists.
+                println!("🔹 Neocortex Restored: {} neurons loaded (Requested: {}).", dto.size, size);
+                return Self {
+                    internal_weights: DMatrix::from_vec(dto.size, dto.size, dto.weights_data),
+                    state: DVector::from_vec(dto.state_data),
+                    _leak_rate: dto.leak_rate,
+                    activity_map: DVector::from_vec(dto.activity_data),
+                };
             }
         }
         
@@ -242,19 +239,5 @@ impl FractalReservoir {
     }
     
     /// Reset activity map during sleep (MECHANICAL HONESTY: Clear neural cache)
-    pub fn reset_activity_map(&mut self) {
-        self.activity_map = DVector::zeros(self.state.len());
-    }
-
-    /// POKE: Injects a burst of pure chaotic entropy into the state.
-    /// Used as a somatic interrupt.
-    pub fn poke(&mut self) {
-        let mut rng = rand::thread_rng();
-        let size = self.state.len();
-        // Inject random noise directly into state
-        let noise = DVector::from_fn(size, |_, _| (rng.gen::<f32>() - 0.5) * 2.0);
-        self.state = &self.state + noise;
-        // Also boost activity map slightly as this is a "jolt"
-        self.activity_map += DVector::from_element(size, 0.5);
-    }
+    // unused methods removed
 }

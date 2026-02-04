@@ -35,9 +35,12 @@ pub fn spawn_inner_voice(
                 _cpu_load: 10.0,
                 _ram_pressure: 0.3,
                 _cognitive_impairment: 0.0,
-                // Inner rumination assumes baseline stats, actual modification happens in Cortex
+                // Inner rumination assumes baseline stats
                 entropy: 0.5, 
                 adenosine: 0.3,
+                dopamine: 0.5,
+                cortisol: 0.1,
+                oxytocin: 0.5,
             };
             
             let _ = tx_cortex.send(input);

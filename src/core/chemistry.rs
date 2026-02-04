@@ -5,6 +5,7 @@ pub struct Neurotransmitters {
     pub adenosine: f32, // Sleep Pressure (0.0 - 1.0)
     pub dopamine: f32,  // Engagement/Reward (0.0 - 1.0)
     pub cortisol: f32,  // Stress (0.0 - 1.0)
+    pub oxytocin: f32,  // Trust/Bonding (0.0 - 1.0) - Social Glue
 }
 
 impl Neurotransmitters {
@@ -13,105 +14,89 @@ impl Neurotransmitters {
             adenosine: 0.0,
             dopamine: 0.5, // Baseline
             cortisol: 0.0,
+            oxytocin: 0.5, // Baseline trust
         }
     }
 
     pub fn tick(&mut self, entropy: f32, cpu_load: f32, is_dreaming: bool, shock_impact: f32, current_neurons: usize, delta_time: f32) {
         // Normalization factor: all constants were tuned for 60Hz
-        // We want (rate * delta_time) to equal (constant) when delta_time is 1/60
         let time_scale = delta_time / (1.0 / 60.0);
 
-        // 1. ADENOSINA (Fatiga/Presión de Sueño)
+        // 1. ADENOSINE (Fatigue)
         if is_dreaming {
-            // Dormir limpia la fatiga - recuperación REAL
-            // Was 0.05 (too fast). Now 0.0005 -> ~30s to recover full bar at 60Hz
-            self.adenosine -= 0.0005 * time_scale; 
+            // Recovery (Sleep)
+            self.adenosine -= 0.001 * time_scale; // Faster recovery
         } else {
-            // Base fatigue from just being awake
-            // Was 0.00005 -> Tuned to 0.000005 (Practically infinite stamina)
-            let base_fatigue = 0.000005 * time_scale;
+            // Decay (Awake)
+            let base_fatigue = 0.00001 * time_scale; // 2x base fatigue (was 10x)
+            let cognitive_load = entropy * 0.0002 * time_scale; // 20x cognitive cost
+            let resilience = (current_neurons as f32 / 500.0).clamp(0.5, 3.0); // Lower resilience cap
             
-            // Cognitive load from processing (high entropy = hard thinking)
-            // Was 0.0001 -> Tuned to 0.00001 (Micro-dosing effort)
-            let cognitive_load = entropy * 0.00001 * time_scale;
-            
-            // Metabolic load from hardware stress (MUCH SLOWER)
-            let metabolic_load = (cpu_load / 100.0) * 0.00005 * time_scale;
-            
-            // Resilience: More neurons = better endurance
-            // Base divisor: 500.0 (At 500 neurons, resilience is 1.0)
-            // Cap raised to 5.0 (5x endurance for huge brains)
-            let resilience = (current_neurons as f32 / 500.0).clamp(0.5, 5.0);
-            
-            // Total load
-            let total_load = (base_fatigue + cognitive_load + metabolic_load) / resilience;
+            let total_load = (base_fatigue + cognitive_load) / resilience;
             self.adenosine += total_load;
-            
-            // Trauma is exhausting (bypass resilience)
-            // Trauma is exhausting (bypass resilience) - but less severe
-            self.adenosine += shock_impact * 0.02 * time_scale;
+            self.adenosine += shock_impact * 0.05 * time_scale; // Trauma bypasses resilience
         }
 
-        // 2. DOPAMINA (Novedad/Recompensa)
-        // Decae naturalmente (Aburrimiento) - Faster decay
-        self.dopamine -= 0.002 * time_scale; 
+        // 2. DOPAMINE (Novelty/Reward)
+        // Decays fast (Boredom is the enemy)
+        self.dopamine -= 0.005 * time_scale; // 2.5x Decay rate
         
-        // Sube con la actividad del reservorio (Solo si es intensa, indicando 'Eureka' o esfuerzo)
-        if entropy > 0.7 && entropy < 0.9 {
-            self.dopamine += 0.005 * time_scale;
+        // Spikes with Entropic Activity (Novelty)
+        if entropy > 0.4 { // Lower threshold for reward
+            let reward = (entropy - 0.4) * 0.02 * time_scale;
+            self.dopamine += reward;
         }
 
-        // 3. CORTISOL (Estrés)
-        // Mechanical Honesty: Shock injects stress DIRECTLY.
-        // Base rise from CPU/Entropy + Raw Shock Impact
-        let stress_sources = shock_impact * 2.0; // Audio shock is immediate
+        // 3. CORTISOL (Stress)
+        // Audio Shock / Trauma
+        let stress_sources = shock_impact * 5.0; // 2.5x Shock sensitivity
         
-        if cpu_load > 60.0 || entropy > 0.75 {
-            self.cortisol += 0.005 * time_scale + stress_sources; 
+        if entropy > 0.8 || cpu_load > 60.0 {
+            // Overloaded
+            self.cortisol += 0.01 * time_scale + stress_sources;
         } else {
-            // Even in calm, shock increases cortisol
-            self.cortisol += stress_sources;
-            
-            // Only recover if no shock
-            if shock_impact < 0.05 {
-                self.cortisol -= 0.002 * time_scale;
+            // Recovery (Calm)
+            if shock_impact < 0.01 {
+               self.cortisol -= 0.004 * time_scale; // Faster recovery
             }
+            self.cortisol += stress_sources;
         }
+
+        // 4. OXYTOCIN (Trust)
+        // Decays slowly
+        self.oxytocin -= 0.001 * time_scale; 
+
+        // 5. HOMEOSTATIC NOISE (The "Breath" of the system)
+        // Prevents static flatlines
+        let noise = (entropy * 0.001) - 0.0005;
+        self.dopamine += noise;
+        self.cortisol += noise;
 
         // CLAMPING
         self.adenosine = self.adenosine.clamp(0.0, 1.0);
         self.dopamine = self.dopamine.clamp(0.0, 1.0);
         self.cortisol = self.cortisol.clamp(0.0, 1.0);
+        self.oxytocin = self.oxytocin.clamp(0.0, 1.0);
+    }
+
+    /// Map Hardware Proprioception to Biological States
+    pub fn update_from_hardware(&mut self, cpu_load: f32, ram_usage: f32, _battery_level: f32) {
+        // 1. CPU -> Metabolism / Heart Rate (Stress floor)
+        // High CPU = High Metabolic Burn = Higher minimal Cortisol
+        if cpu_load > 80.0 {
+            self.cortisol = self.cortisol.max(0.4); // Stress floor
+        }
+        
+        // 2. RAM -> Brain Fog (Adenosine floor in extreme cases)
+        // If RAM is full, the "brain" is clogged. 
+        if ram_usage > 0.9 {
+            self.adenosine = self.adenosine.max(0.8); // Forced fatigue
+        }
     }
     
     /// Set adenosine base level from unprocessed memory count (MECHANICAL HONESTY)
     /// This REPLACES the memory component, not adds to it
-    pub fn set_memory_pressure(&mut self, unprocessed_ratio: f32) {
-        // Memory pressure creates a "floor" of adenosine
-        // This is the baseline fatigue from carrying unprocessed experiences
-        // The rest comes from tick() (CPU, entropy, trauma)
-        
-        // Memory contributes 0-50% of adenosine as a floor
-        let memory_base = (unprocessed_ratio * 0.5).clamp(0.0, 0.5);
-        
-        // If current adenosine is below memory floor, raise it
-        // If it's above (from other sources), don't lower it
-        if self.adenosine < memory_base {
-            self.adenosine = memory_base;
-        }
-    }
-    
-    /// Check if body is at breaking point (forced sleep)
-    pub fn is_body_failing(&self) -> bool {
-        // Only at 99%+ adenosine does the body FORCE sleep
-        self.adenosine > 0.99
-    }
-
-    /// Check if recovered enough to wake (HYSTERESIS - evita bucle colapso/despertar)
-    /// Solo despertar cuando adenosina bajó significativamente, no en el borde del umbral
-    pub fn is_recovered_to_wake(&self) -> bool {
-        self.adenosine < 0.3 // Deeper sleep required to wake
-    }
+    // Unused methods removed (set_memory_pressure, is_body_failing, is_recovered_to_wake)
     
     /// Get degradation factor for inference (brain fog)
     pub fn get_cognitive_impairment(&self) -> f32 {
