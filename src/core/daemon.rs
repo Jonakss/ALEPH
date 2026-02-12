@@ -983,8 +983,8 @@ pub fn run() -> Result<()> {
                         // EMIT VOCAL THOUGHT (Resonance)
                         let _ = tx_thoughts.send(Thought::new(MindVoice::Vocal, final_text.clone()));
                         
-                        // ACTUATE VOICE (The missing link!)
-                        voice::speak(final_text.clone(), tx_thoughts.clone());
+                        // REMOVED MANUAL ACTUATION - Rely on Main Loop rx_thoughts
+                        // voice::speak(final_text.clone(), tx_thoughts.clone());
 
                         // Feed back to Memory (We spoke it, so we remember it)
                         let _ = tx_mem.send(crate::core::hippocampus::MemoryCommand::ProcessStimulus { 
@@ -1026,6 +1026,10 @@ pub fn run() -> Result<()> {
         // --- BROADCAST TELEMETRY ---
         if ticks % 5 == 0 { // ~12Hz update rate for TUI (at 60Hz tick)
              let chem = chemistry.lock().unwrap();
+             
+             // Get latest thought for UI stream
+             let latest_thought = telemetry_history.back().cloned().unwrap_or_else(|| "Waiting for input...".to_string());
+             
              let packet = AlephPacket::Telemetry {
                  adenosine: chem.adenosine,
                  cortisol: chem.cortisol,
@@ -1036,7 +1040,7 @@ pub fn run() -> Result<()> {
                  lucidity: 1.0 - last_body_state.ram_usage, // Simplified
                  reservoir_activity: ego.get_activity_snapshot(),
                  short_term_memory: telemetry_history.iter().cloned().collect(),
-                 current_state: ego.get_state_description(),
+                 current_state: latest_thought, // FIXED: Send actual thought!
                  entropy: current_entropy,
                  loop_frequency: current_hz,
                  cpu_usage: last_body_state.cpu_usage,
