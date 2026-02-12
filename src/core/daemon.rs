@@ -279,7 +279,31 @@ pub fn run() -> Result<()> {
                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\nDashboard file missing (web/index.html)".as_bytes());
                                 }
                             }
-                        } else if request.contains("GET /telemetry") {
+                        } else if request.contains("GET /style.css") {
+                                if let Ok(content) = fs::read_to_string("web/style.css") {
+                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n";
+                                    let response = format!("{}{}", headers, content);
+                                    let _ = stream.write(response.as_bytes());
+                                } else {
+                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+                                }
+                            } else if request.contains("GET /three.min.js") {
+                                if let Ok(content) = fs::read_to_string("web/three.min.js") {
+                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/javascript\r\n\r\n";
+                                    let response = format!("{}{}", headers, content);
+                                    let _ = stream.write(response.as_bytes());
+                                } else {
+                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+                                }
+                            } else if request.contains("GET /index.js") { // Just in case, though it's inline in HTML
+                                if let Ok(content) = fs::read_to_string("web/index.js") {
+                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/javascript\r\n\r\n";
+                                    let response = format!("{}{}", headers, content);
+                                    let _ = stream.write(response.as_bytes());
+                                } else {
+                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+                                }
+                            } else if request.contains("GET /telemetry") {
                             // Serve JSON State (HTTP Fallback)
                             let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
                             let json = {
@@ -741,7 +765,7 @@ pub fn run() -> Result<()> {
                  chem.adenosine = 0.0; // Reset fatigue
                  chem.dopamine = (chem.dopamine + 0.1).min(1.0); // Mild interest
                  chem.cortisol = (chem.cortisol + 0.05).min(1.0); // Slight startle
-                 continue;
+                 // continue; // REMOVED: Allow fall-through to trigger Cortex!
              }
 
              let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("USER INPUT: '{}'", text)));
@@ -932,6 +956,8 @@ pub fn run() -> Result<()> {
                 // The raw probability cloud hits the reservoir.
                 ego.inject_logits(&output.neural_echo);
 
+
+
                 // 2. RESONANCE CHECK
                 // Did the Field collapse the wave into a word?
                 if let Some(text) = output.synthesized_thought {
@@ -957,6 +983,9 @@ pub fn run() -> Result<()> {
                         // EMIT VOCAL THOUGHT (Resonance)
                         let _ = tx_thoughts.send(Thought::new(MindVoice::Vocal, final_text.clone()));
                         
+                        // ACTUATE VOICE (The missing link!)
+                        voice::speak(final_text.clone(), tx_thoughts.clone());
+
                         // Feed back to Memory (We spoke it, so we remember it)
                         let _ = tx_mem.send(crate::core::hippocampus::MemoryCommand::ProcessStimulus { 
                              text: final_text, 

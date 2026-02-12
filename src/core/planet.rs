@@ -301,6 +301,8 @@ impl Planet {
         // Pull thoughts towards the documentation's probability space.
         distorted_logits = self.semantic_field.apply(distorted_logits)?;
         
+
+        
         Ok(distorted_logits)
     }
 
@@ -326,7 +328,30 @@ impl Planet {
         logits = self.apply_semantic_matrix(logits, chem)?;
         
         // CHECK RESONANCE
-        let resonance = self.semantic_field.find_resonance(&logits).unwrap_or(None);
+        let mut resonance = self.semantic_field.find_resonance(&logits).unwrap_or(None);
+        
+        // MANIC OVERRIDE: If High Dopamine (> 0.6) and NO resonance, force a word.
+        if resonance.is_none() && chem.dopamine > 0.6 {
+             // Force generate a short burst (1-5 tokens)
+             let mut burst = String::new();
+             for _ in 0..3 {
+                 if let Ok(token) = self.logits_processor.sample(&logits) {
+                     if let Ok(fragment) = self.tokenizer.decode(&[token], true) {
+                         burst.push_str(&fragment);
+                     }
+                     // Simplistic: Re-forward for next token? No, too slow for perceive.
+                     // access to self.model here allows forward? Yes.
+                     // But let's just pick ONE token for now to be safe and fast.
+                     break; 
+                 }
+             }
+             if !burst.trim().is_empty() {
+                 resonance = Some(burst.trim().to_string());
+             } else {
+                 // Absolute fallback
+                 resonance = Some("!".to_string());
+             }
+        }
         
         // Return raw logits as Neural Echo
         let echo = logits.to_vec1::<f32>()?;

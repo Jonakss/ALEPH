@@ -2,7 +2,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
-use crate::core::thought::Thought;
+use crate::core::thought::{Thought, MindVoice};
 use std::io::Write;
 
 // Global Serial Queue
@@ -55,8 +55,8 @@ fn get_queue() -> &'static Sender<String> {
 pub fn speak(text: String, _tx_thought: Sender<Thought>) {
     let queue = get_queue();
     // Log intent to speak
-    // println!(">> VOCAL QUEUE: '{}'", text);
-    // let _ = tx_thought.send(Thought::new(MindVoice::System, format!(">> VOCAL QUEUE: '{}'", text)));
+    println!(">> VOCAL QUEUE: '{}'", text);
+    let _ = _tx_thought.send(Thought::new(MindVoice::System, format!(">> VOCAL QUEUE: '{}'", text)));
     
     // Send to serial thread
     let _ = queue.send(text);
