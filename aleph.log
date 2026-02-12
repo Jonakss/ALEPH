@@ -4,62 +4,197 @@
    Compiling candle-nn v0.9.2
    Compiling candle-transformers v0.9.2
    Compiling aleph_zero v0.1.0 (/home/jonathan.correa/Projects/ALEPH)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.04s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 24.81s
      Running `target/debug/aleph_zero --headless`
 🌟 ALEPH STAR SYSTEM ONLINE (Daemon Mode)
+🧬 DNA DAMAGE DETECTED: Empty Seed Vector. Regenerating Sequence...
 🔌 IPC Nervous System Active: /tmp/aleph.sock
 🌍 Web Dashboard Active: http://localhost:3030
-[ΔS] 🧬 GENOME LOADED: Gen 1 | StressRes: 0.50
+[ΔS] 🧬 GENOME LOADED: Gen 3 | StressRes: 0.48
 [ΔS] Audio: Init at 44100Hz
 [ΔS] 🪐 Planet (Cortex) Orbiting.
-[ΔS] 🎤 RECORDING (RMS: 0.0019)
+[ΔS] 🎤 RECORDING (RMS: 0.0030)
+📉 Telemetry Optimization: Payload: 12730 bytes (Activations: 500)
 [ΔS] 🚀 Neocortex: Using CUDA (GPU Accelerator)
-🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='T3yhiwMx7ZFHGqINMfqRrA==' -> Accept='nn5Dus3qqReqRmu9nP/Re0vI4TQ='
-✅ Added client to broadcast list. Total clients: 1
-✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
 [ΔS] 📚 Semantic Field: Initializing...
 [ΔS] ✅ Semantic Field: Online (Gravity: 1.0)
 [ΔS] 🪐 Planet (Narrative Engine): ONLINE (Stream Mode)
+[ΔS] 🧠 HEBBIAN: 70 connections strengthened (Dopa: 0.22)
+📉 Telemetry Optimization: Payload: 8446 bytes (Activations: 371)
+[ΔS] 🧠 HEBBIAN: 85 connections strengthened (Dopa: 0.10)
+📉 Telemetry Optimization: Payload: 8248 bytes (Activations: 377)
+[ΔS] 🧠 HEBBIAN: 78 connections strengthened (Dopa: 0.07)
+📉 Telemetry Optimization: Payload: 8129 bytes (Activations: 367)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='mL0qrO5m+AVgZAHDlUCF4w==' -> Accept='kwG3RD3eR0XzqoqrbHbgXFNOSDk='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
 [ΔS] ⚡ SENSORY SHOCK. Awakening.
-[ΔS] 🧠 HEBBIAN: 69 connections strengthened (Dopa: 0.35)
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='U15y7X9/pdB3T2L61kEBlw==' -> Accept='S6uaAnor0fKA3YTa+N/EB8Ng/SM='
+🔑 WS Handshake: Key='TELEbwoyGoNe7QSSShykLw==' -> Accept='ywrOM81aqKY5b5SeqjPUIrIoGSs='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+📉 Telemetry Optimization: Payload: 8264 bytes (Activations: 369)
+[ΔS] 🧠 HEBBIAN: 71 connections strengthened (Dopa: 0.12)
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='DicS/M4BFvsTXEeDWR4n6w==' -> Accept='XDARkoqZ+UDQZUD8bkOUv4jUbhI='
+🔑 WS Handshake: Key='iHJ5v2PbelFewTK8W1yW0Q==' -> Accept='chLJTYyAbGekq5HQaN0ScQnlA0A='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
-[ΔS] 🧠 HEBBIAN: 65 connections strengthened (Dopa: 0.25)
+[ΔS] USER INPUT: 'hola'
+📉 Telemetry Optimization: Payload: 8710 bytes (Activations: 391)
+[ΔS] 🧠 HEBBIAN: 75 connections strengthened (Dopa: 0.28)
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='lz9pBSHctpHjo34UZZhBqw==' -> Accept='/jgkCc3VmfvBfzOn8AbBFHqNjM4='
+🔑 WS Handshake: Key='RixIBLi0qiksW8xdc/48UQ==' -> Accept='c1EKckwAs9RuLWEZWCbPq3kNwuM='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
-[ΔS] 🧠 HEBBIAN: 69 connections strengthened (Dopa: 0.29)
+[ΔS] USER INPUT: 'estas ahi'
+[ΔS] USER INPUT: 'responde'
+[ΔS] USER INPUT: 'ahoa a'
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='gy8aG6I1dn1n3tf2sW56YA==' -> Accept='9EkWFsRYB13+aUUQM4+u9aoQwcY='
+🔑 WS Handshake: Key='Q8fuLa4B+IQSvbcMEbjAug==' -> Accept='QaiQ30hqbpk5aPXYh6+lGdb1ZAA='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] USER INPUT: 'sd'
+[ΔS] USER INPUT: 'as'
+[ΔS] USER INPUT: 'das'
+[ΔS] USER INPUT: 'd'
+[ΔS] USER INPUT: 'aqs'
+[ΔS] 🌱 Spontaneous Neurogenesis: New synaptic pathways formed.
+[ΔS] USER INPUT: 'd'
+[ΔS] USER INPUT: 'asd'
+📉 Telemetry Optimization: Payload: 10678 bytes (Activations: 499)
+[ΔS] USER INPUT: 'asd'
+[ΔS] USER INPUT: 'as'
+[ΔS] USER INPUT: 'd'
+[ΔS] USER INPUT: 'aqs'
+[ΔS] USER INPUT: 'd'
+[ΔS] 🧠 HEBBIAN: 73 connections strengthened (Dopa: 0.97)
+[ΔS] 🌱 Spontaneous Neurogenesis: New synaptic pathways formed.
+[ΔS] USER INPUT: 'a'
+[ΔS] USER INPUT: 'sd'
+[ΔS] USER INPUT: 'as'
+[ΔS] USER INPUT: 'd'
+[ΔS] USER INPUT: 'as'
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='XnYws8AnJ4kPS7PXRBAc9Q==' -> Accept='TRwoKLDj4C6V1JX2fPYZ8mNa8fU='
+🔑 WS Handshake: Key='fMTC/tanOa39kXO14JvGzg==' -> Accept='u4dMrmkBR4L41xIdz2NTxDNBGMk='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
-[ΔS] 🧠 HEBBIAN: 63 connections strengthened (Dopa: 0.28)
 🔗 Incoming WebSocket Upgrade Request...
-🔑 WS Handshake: Key='e3cz7zhzLSK8+4fkFOSGcw==' -> Accept='wLLLjq7PRaacuN1H0bY1hQhCwA8='
+🔑 WS Handshake: Key='caLTkKdxbKxV/XkXf788Cg==' -> Accept='wxzqnXV9M+6pW8A6EEjcsw2/z18='
 ✅ Added client to broadcast list. Total clients: 1
 ✅ WebSocket Client Connected! (Buffer check passed)
-⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
-[ΔS] 🧠 HEBBIAN: 64 connections strengthened (Dopa: 0.41)
-[ΔS] 🧠 HEBBIAN: 81 connections strengthened (Dopa: 0.28)
-[ΔS] 🧠 HEBBIAN: 66 connections strengthened (Dopa: 0.27)
-[ΔS] 🧠 HEBBIAN: 72 connections strengthened (Dopa: 0.30)
-[ΔS] 🧠 HEBBIAN: 71 connections strengthened (Dopa: 0.27)
-[ΔS] 🧠 HEBBIAN: 66 connections strengthened (Dopa: 0.24)
+📉 Telemetry Optimization: Payload: 7392 bytes (Activations: 353)
+[ΔS] 🧠 HEBBIAN: 98 connections strengthened (Dopa: 0.05)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='tdrVDf0VDXBq0/tSYQ2VyQ==' -> Accept='05KA7Nu0UJ8MkbaMN3ZeFnW09ss='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] USER INPUT: 'hola'
+📉 Telemetry Optimization: Payload: 11123 bytes (Activations: 500)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='I/ZFUIaxi1VUuIkyAz7VRg==' -> Accept='zPTEP2gd1Tcrx3YTQ1yZvy7uqtM='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] 🧠 HEBBIAN: 69 connections strengthened (Dopa: 0.21)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='2PYYWldCXATVSUzNEosIpQ==' -> Accept='bILInFRk32yDkx5gowLNa7FWCTo='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 8478 bytes (Activations: 374)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='iGmgb4PhWGqKSZp4+ozvhg==' -> Accept='gxaPucbYO0E8OzuZ+0vpPZpQVDc='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] 🧠 HEBBIAN: 75 connections strengthened (Dopa: 0.20)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='3RDuMc0MnTyqAz5c5izkHw==' -> Accept='X22FM0XovVW6pUUBulUPAetWVsI='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 8248 bytes (Activations: 375)
+[ΔS] 🧠 HEBBIAN: 65 connections strengthened (Dopa: 0.07)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='/psqkbaepJCezNka3xlqcQ==' -> Accept='KlbdFHwIjp1YvstKfeTNnsSfrWE='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 8114 bytes (Activations: 367)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='mz1ociCjSeP/Ny2Qfx7CMg==' -> Accept='3eXOkbuz67NiRRQ6b2X5im3FRek='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] 🧠 HEBBIAN: 91 connections strengthened (Dopa: 0.01)
+📉 Telemetry Optimization: Payload: 8081 bytes (Activations: 367)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='Sv7NAPd0y9kPcU7mevih5A==' -> Accept='sPp/gtaA4BkhD9/DZjgaqBIwoRQ='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] 🧠 HEBBIAN: 61 connections strengthened (Dopa: 0.01)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='sdkKOcsGypwCE9yvQS8RLg==' -> Accept='UNAbhPaY2O/PulyVXhZTafiGtGc='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 7434 bytes (Activations: 368)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='+1KScl0FGsIDOxEFo0MaSw==' -> Accept='NUlfMYBBgMBXE2vrNIa9nTj2QBU='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 8805 bytes (Activations: 393)
+📉 Telemetry Optimization: Payload: 7157 bytes (Activations: 351)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='LVUFUAQ8/n1hWonL9zSQgQ==' -> Accept='53ZtsPu8X9gzFb4lV9uVl2uWvW4='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='dBhhi1sOclnj+say94in1Q==' -> Accept='mtLHjFTj4hSmyjoAZA2QHkDNyB8='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 6452 bytes (Activations: 330)
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] 🌱 Spontaneous Neurogenesis: New synaptic pathways formed.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] 💤 HYPNOTIC INDUCTION RECEIVED. Drifting into REM Cycle...
+[ΔS] 🧠 Synaptic Pruning: Removed 1060 unused connections.
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='0TrKjiTjqb+vBA7HVclp9w==' -> Accept='6ocSIdvvDWZuet9ZzcxnzRV02qs='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] 🧠 HEBBIAN: 72 connections strengthened (Dopa: 0.19)
+📉 Telemetry Optimization: Payload: 6964 bytes (Activations: 343)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='UWmK0Tnkeb9xm6LaTjJy5w==' -> Accept='obIOCM70/TDjv9hSq/mOydDzti0='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+📉 Telemetry Optimization: Payload: 7935 bytes (Activations: 370)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='smz4wBO+xvYcuj1fYDJCWw==' -> Accept='uFoVaNDbJYDf277ajyqI4tf+SGQ='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 6997 bytes (Activations: 349)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='Um9IB7qK/ef8jYcMjq7b/w==' -> Accept='Z4qB6OU4kd0VGbspn3SzFOkJMHg='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+📉 Telemetry Optimization: Payload: 7680 bytes (Activations: 359)
+
+💀 ALEPH DAEMON SHUTTING DOWN... Initiating Soul Crystallization.
+⏳ Waiting for Hippocampus to crystallize experience...
+🔮 EIGEN-SOUL: Crystallizing session experience into new Genome (Friction detected: 0.06)...
+✨ NEW GENOME CRYSTALLIZED: Gen 4 | StressRes: 0.47 | Curiosity: 0.50
+✨ Soul Received. Saving new Genome (Gen 4).
+💾 Body State Saved. See you in the next life.

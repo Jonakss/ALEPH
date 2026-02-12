@@ -327,10 +327,39 @@ pub fn run() -> Result<()> {
         loop {
             thread::sleep(Duration::from_millis(83)); // ~12Hz broadcast
             
-            let json = {
+            let (json, state_summary) = {
                 let state = ws_broadcast_state.lock().unwrap();
-                serde_json::to_string(&*state).unwrap_or_default()
+                
+                // Sparse Updates: Filter neurons > 0.005 and round to 3 decimals
+                let sparse_reservoir: Vec<(usize, f32)> = state.reservoir_activity.iter().enumerate()
+                    .filter(|(_, &v)| v > 0.005)
+                    .map(|(i, &v)| (i, (v * 1000.0).round() / 1000.0))
+                    .collect();
+
+                let json_obj = serde_json::json!({
+                    "dopamine": (state.dopamine * 1000.0).round() / 1000.0,
+                    "cortisol": (state.cortisol * 1000.0).round() / 1000.0,
+                    "adenosine": (state.adenosine * 1000.0).round() / 1000.0,
+                    "oxytocin": (state.oxytocin * 1000.0).round() / 1000.0,
+                    "serotonin": (state.serotonin * 1000.0).round() / 1000.0,
+                    "entropy": (state.entropy * 1000.0).round() / 1000.0,
+                    "loop_frequency": (state.loop_frequency * 10.0).round() / 10.0,
+                    "reservoir_activity": sparse_reservoir, 
+                    "current_state": state.current_state,
+                    "trauma_state": state.trauma_state,
+                    "hebbian_events": state.hebbian_events,
+                    "reservoir_size": state.reservoir_size
+                });
+                
+                let s = json_obj.to_string();
+                let summary = format!("Payload: {} bytes (Activations: {})", s.len(), sparse_reservoir.len());
+                (s, summary)
             };
+            
+            // Log payload size occasionally (every 60 ticks / 5s)
+            if tick_count % 60 == 0 {
+                 println!("📉 Telemetry Optimization: {}", state_summary);
+            }
             
             if json.is_empty() { 
                 // println!("⚠️ JSON State is empty!"); // Silence excessive logs

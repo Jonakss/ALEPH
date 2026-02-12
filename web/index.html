@@ -665,7 +665,7 @@
       let lastStreamText = '';
 
       function addStreamEntry(text) {
-        if (text === lastStreamText) return;
+        // if (text === lastStreamText) return; // Allow loops
         lastStreamText = text;
 
         const stream = document.getElementById('stream');
@@ -792,27 +792,50 @@
       function updateReservoir(activity) {
         if (!neuronMesh) return;
         const colors = neuronMesh.geometry.attributes.color;
-        const count = Math.min(activity.length, MAX_DISPLAY_NEURONS);
+        const array = colors.array;
+        
+        // 1. Reset all neurons to base state (Dark Void)
+        // This is necessary because we only receive active neurons now.
+        for (let i = 0; i < MAX_DISPLAY_NEURONS; i++) {
+             array[i*3] = 0.02;   // R
+             array[i*3+1] = 0.05; // G
+             array[i*3+2] = 0.1;  // B (Faint Blue)
+        }
 
-        for (let i = 0; i < count; i++) {
-          const a = activity[i]; // 0-1
+        // 2. Apply Sparse Updates
+        // format: [[index, value], [index, value], ...]
+        if (Array.isArray(activity)) {
+            for (let j = 0; j < activity.length; j++) {
+                const entry = activity[j];
+                // Handle both sparse [[i,v]] and dense [v,v] just in case
+                let i, a;
+                if (Array.isArray(entry)) {
+                    i = entry[0];
+                    a = entry[1];
+                } else {
+                    i = j;
+                    a = entry; // Fallback for dense arrays
+                }
 
-          // Color map: low=blue, mid=cyan, high=magenta/white
-          if (a < 0.3) {
-            colors.array[i*3] = a * 0.3;
-            colors.array[i*3+1] = a * 1.5;
-            colors.array[i*3+2] = 0.8 + a * 0.2;
-          } else if (a < 0.7) {
-            const t = (a - 0.3) / 0.4;
-            colors.array[i*3] = 0.1 + t * 0.9;
-            colors.array[i*3+1] = 0.83 - t * 0.3;
-            colors.array[i*3+2] = 1.0 - t * 0.3;
-          } else {
-            const t = (a - 0.7) / 0.3;
-            colors.array[i*3] = 1.0;
-            colors.array[i*3+1] = 0.2 + t * 0.8;
-            colors.array[i*3+2] = 0.5 + t * 0.5;
-          }
+                if (i >= MAX_DISPLAY_NEURONS) continue;
+
+                // Color map: low=blue, mid=cyan, high=magenta/white
+                if (a < 0.3) {
+                    array[i*3] = a * 0.3;
+                    array[i*3+1] = a * 1.5;
+                    array[i*3+2] = 0.8 + a * 0.2;
+                } else if (a < 0.7) {
+                    const t = (a - 0.3) / 0.4;
+                    array[i*3] = 0.1 + t * 0.9;
+                    array[i*3+1] = 0.83 - t * 0.3;
+                    array[i*3+2] = 1.0 - t * 0.3;
+                } else {
+                    const t = (a - 0.7) / 0.3;
+                    array[i*3] = 1.0;
+                    array[i*3+1] = 0.2 + t * 0.8;
+                    array[i*3+2] = 0.5 + t * 0.5;
+                }
+            }
         }
         colors.needsUpdate = true;
       }

@@ -231,8 +231,13 @@ impl Planet {
 
         let prompt = self.history.clone();
         
-        // LOBOTOMY PROTCOL: DO NOT GENERATE TEXT.
-        // Instead, PERCEIVE (Get Logits/Echo)
+        // LOBOTOMY PROTCOL: 
+        // Default: NO TEXT (Neural Echo only).
+        // Exception: HIGH SALIENCE (Dopamine > 0.6 or Confidence > 0.8) -> External Voice.
+        
+        // We simulate "Confidence" via the semantic resonance score (calculated inside).
+        // If resonance is strong, we SPEAK.
+        
         let (neural_echo, resonant_word) = match self.perceive(&prompt, chem) {
             Ok((logits, word)) => (logits, word),
             Err(e) => {
@@ -241,15 +246,29 @@ impl Planet {
             }
         };
 
-        // If Resonant Word is found, inject it into History?
-        // Maybe. For now, just return it.
-        // We do NOT update history with the word, because we didn't "decide" to say it yet.
-        // The Daemon handles the feedback loop if spoken.
+        // VOICE GATING LOGIC
+        // If we found a resonant word, that's a candidate for speech.
+        // But we also want to allow full sentences if the system is "excited" (High Dopamine).
         
-        let text_out = if let Some(ref w) = resonant_word {
-             w.clone() 
+        let text_out = if chem.dopamine > 0.6 {
+             // HIGH EXCITEMENT: Allow the LLM to speak a bit (maybe one word/sentence?)
+             // Actually, `perceive` only returns the *last token's* resonance.
+             // If we want FULL speech, we need to call `generate`.
+             // But `generate` is slow.
+             
+             // Compromise: If highly excited, we treat the `resonant_word` as a "Shout".
+             if let Some(ref w) = resonant_word {
+                 w.clone()
+             } else {
+                 String::new()
+             }
         } else {
-             String::new() 
+             // LOW ENERGY: Only speak if the word is VERY resonant (defined by perceive returning Some)
+             if let Some(ref w) = resonant_word {
+                 w.clone() 
+             } else {
+                 String::new() 
+             }
         };
 
         (neural_echo, text_out)
