@@ -30,14 +30,19 @@ impl AudioListener {
         let ctx = {
             let _log_gag = gag::Gag::stderr().ok();
             WhisperContext::new_with_params(
-                "ggml-base.bin", 
+                "models/ggml-base.bin", 
                 WhisperContextParameters::default()
             ).expect("failed to load ggml-base.bin")
         };
         
         let state = Arc::new(Mutex::new(ctx));
         let is_muted = Arc::new(Mutex::new(false)); // START LISTENING
-        let attention_threshold = Arc::new(Mutex::new(0.00001)); // ULTRA SENSITIVE
+        
+        // CONSCIOUSNESS GATE: Whisper only activates on ELEVATED energy audio
+        // This is NOT the recording threshold (which stays low for FFT)
+        // This is the "attention" threshold - must speak clearly for Whisper
+        let whisper_rms_threshold = Arc::new(Mutex::new(0.05)); // LOWERED for normal speech
+        let attention_threshold = Arc::new(Mutex::new(0.001)); // FFT sensitivity (low)
 
         // 2. Setup Audio Input
         let host = cpal::default_host();
@@ -57,6 +62,7 @@ impl AudioListener {
         let audio_buffer = Arc::new(Mutex::new(Vec::new()));
         let is_recording = Arc::new(Mutex::new(false));
         let silence_frames = Arc::new(Mutex::new(0));
+        let peak_rms_during_recording = Arc::new(Mutex::new(0.0f32)); // CONSCIOUSNESS GATE: Track peak RMS
 
         // WORKER THREAD SETUP
         let (audio_work_tx, audio_work_rx) = std::sync::mpsc::channel::<Vec<f32>>();
@@ -116,7 +122,9 @@ impl AudioListener {
                                 || triggers.iter().any(|&t| text.contains(t) || text.to_lowercase().contains(&t.to_lowercase()));
 
                             if !text.is_empty() && !is_hallucination {
-                                let _ = worker_thought_tx.send(Thought::new(MindVoice::Cortex, format!("Heard: '{}'", text)));
+                                // SEMANTIC PERTURBATION (Not instruction)
+                                // The text is NOT sent as "user input" - it's a sensory perturbation
+                                let _ = worker_thought_tx.send(Thought::new(MindVoice::Sensory, format!("🎧 SEMANTIC ECHO: '{}'", text)));
                                 let _ = worker_ears_tx.send(text);
                             }
                         }
@@ -130,6 +138,8 @@ impl AudioListener {
         let silence_counter = silence_frames.clone();
         let muted_clone = is_muted.clone();
         let threshold_clone = attention_threshold.clone();
+        let whisper_threshold_clone = whisper_rms_threshold.clone();
+        let peak_rms_clone = peak_rms_during_recording.clone();
         let fft_clone = fft_arc.clone();
         let _scratch_clone = fft_scratch.clone();
         let thought_tx_debug = thought_tx.clone(); // For debug logging
@@ -210,13 +220,19 @@ impl AudioListener {
                 let Ok(mut recording) = recording_limit.try_lock() else { return; };
                 let Ok(mut buffer) = buffer_clone.try_lock() else { return; };
                 let Ok(mut silence) = silence_counter.try_lock() else { return; };
+                let Ok(mut peak_rms) = peak_rms_clone.try_lock() else { return; };
 
                 if rms > threshold {
                     if !*recording {
                         *recording = true;
+                        *peak_rms = 0.0; // Reset peak RMS for new recording
                         buffer.clear();
                         // DEBUG: Log when recording starts
                         let _ = thought_tx_debug.send(Thought::new(MindVoice::System, format!("🎤 RECORDING (RMS: {:.4})", rms)));
+                    }
+                    // Track peak RMS during recording
+                    if rms > *peak_rms {
+                        *peak_rms = rms;
                     }
                     *silence = 0;
                 } else if *recording {
@@ -230,15 +246,22 @@ impl AudioListener {
                     if *silence > 45 { // ~0.75s silence (more generous)
                         *recording = false;
                         
-                        // DEBUG: Log when sending to Whisper
-                        let samples_len = buffer.len();
-                        let _ = thought_tx_debug.send(Thought::new(MindVoice::System, format!("🎧 SENT TO WHISPER ({} samples)", samples_len)));
+                        // CONSCIOUSNESS GATE: Only send to Whisper if peak RMS > threshold
+                        let whisper_threshold = whisper_threshold_clone.try_lock().map(|t| *t).unwrap_or(0.3);
                         
-                        // E. Send to Worker
-                        let samples = buffer.clone();
-                        // Detect Worker Death
-                        if let Err(_) = audio_work_tx.send(samples) {
-                             eprintln!("🔴 CRITICAL: Audio Worker Thread Disconnected!");
+                        if *peak_rms > whisper_threshold {
+                            // Loud enough for conscious attention
+                            let _samples_len = buffer.len();
+                            let _ = thought_tx_debug.send(Thought::new(MindVoice::System, format!("🧠 CONSCIOUSNESS GATE OPEN (Peak RMS: {:.4})", *peak_rms)));
+                            
+                            // E. Send to Worker
+                            let samples = buffer.clone();
+                            if let Err(_) = audio_work_tx.send(samples) {
+                                 eprintln!("🔴 CRITICAL: Audio Worker Thread Disconnected!");
+                            }
+                        } else {
+                            // Too quiet - stays in basal mode (FFT only)
+                            let _ = thought_tx_debug.send(Thought::new(MindVoice::Sensory, format!("💤 BASAL MODE (Peak RMS: {:.4} < {:.2})", *peak_rms, whisper_threshold)));
                         }
                         buffer.clear();
                     }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use anyhow::Result;
+// use rand::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Genome {
@@ -42,7 +43,17 @@ impl Genome {
     pub fn load() -> Result<Self> {
         let path = "genome.json";
         if let Ok(content) = fs::read_to_string(path) {
-            let genome: Genome = serde_json::from_str(&content)?;
+            let mut genome: Genome = serde_json::from_str(&content)?;
+            
+            // GENETIC REPAIR: If user cleared the vector manually
+            if genome.seed_vector.is_empty() {
+                 println!("🧬 DNA DAMAGE DETECTED: Empty Seed Vector. Regenerating Sequence...");
+                 // Generate random noise for new seed
+                 let _rng = rand::thread_rng();
+                 use rand::Rng; // Ensure Rng is in scope or just map
+                 genome.seed_vector = (0..384).map(|_| rand::thread_rng().gen_range(-0.1..0.1)).collect();
+            }
+            
             Ok(genome)
         } else {
             // Genesis

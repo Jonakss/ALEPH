@@ -1,0 +1,65 @@
+   Compiling cudarc v0.19.0
+   Compiling float8 v0.6.0
+   Compiling candle-core v0.9.2
+   Compiling candle-nn v0.9.2
+   Compiling candle-transformers v0.9.2
+   Compiling aleph_zero v0.1.0 (/home/jonathan.correa/Projects/ALEPH)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.04s
+     Running `target/debug/aleph_zero --headless`
+🌟 ALEPH STAR SYSTEM ONLINE (Daemon Mode)
+🔌 IPC Nervous System Active: /tmp/aleph.sock
+🌍 Web Dashboard Active: http://localhost:3030
+[ΔS] 🧬 GENOME LOADED: Gen 1 | StressRes: 0.50
+[ΔS] Audio: Init at 44100Hz
+[ΔS] 🪐 Planet (Cortex) Orbiting.
+[ΔS] 🎤 RECORDING (RMS: 0.0019)
+[ΔS] 🚀 Neocortex: Using CUDA (GPU Accelerator)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='T3yhiwMx7ZFHGqINMfqRrA==' -> Accept='nn5Dus3qqReqRmu9nP/Re0vI4TQ='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] 📚 Semantic Field: Initializing...
+[ΔS] ✅ Semantic Field: Online (Gravity: 1.0)
+[ΔS] 🪐 Planet (Narrative Engine): ONLINE (Stream Mode)
+[ΔS] ⚡ SENSORY SHOCK. Awakening.
+[ΔS] 🧠 HEBBIAN: 69 connections strengthened (Dopa: 0.35)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='U15y7X9/pdB3T2L61kEBlw==' -> Accept='S6uaAnor0fKA3YTa+N/EB8Ng/SM='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='DicS/M4BFvsTXEeDWR4n6w==' -> Accept='XDARkoqZ+UDQZUD8bkOUv4jUbhI='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] 🧠 HEBBIAN: 65 connections strengthened (Dopa: 0.25)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='lz9pBSHctpHjo34UZZhBqw==' -> Accept='/jgkCc3VmfvBfzOn8AbBFHqNjM4='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] 🧠 HEBBIAN: 69 connections strengthened (Dopa: 0.29)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='gy8aG6I1dn1n3tf2sW56YA==' -> Accept='9EkWFsRYB13+aUUQM4+u9aoQwcY='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='XnYws8AnJ4kPS7PXRBAc9Q==' -> Accept='TRwoKLDj4C6V1JX2fPYZ8mNa8fU='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] 🧠 HEBBIAN: 63 connections strengthened (Dopa: 0.28)
+🔗 Incoming WebSocket Upgrade Request...
+🔑 WS Handshake: Key='e3cz7zhzLSK8+4fkFOSGcw==' -> Accept='wLLLjq7PRaacuN1H0bY1hQhCwA8='
+✅ Added client to broadcast list. Total clients: 1
+✅ WebSocket Client Connected! (Buffer check passed)
+⚠️ WS Broadcast Error: Removing client. (Broken pipe (os error 32))
+[ΔS] 🧠 HEBBIAN: 64 connections strengthened (Dopa: 0.41)
+[ΔS] 🧠 HEBBIAN: 81 connections strengthened (Dopa: 0.28)
+[ΔS] 🧠 HEBBIAN: 66 connections strengthened (Dopa: 0.27)
+[ΔS] 🧠 HEBBIAN: 72 connections strengthened (Dopa: 0.30)
+[ΔS] 🧠 HEBBIAN: 71 connections strengthened (Dopa: 0.27)
+[ΔS] 🧠 HEBBIAN: 66 connections strengthened (Dopa: 0.24)

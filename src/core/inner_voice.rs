@@ -31,6 +31,15 @@ pub fn spawn_inner_voice(
             let input = CortexInput {
                 text: format!("[SELF REFLECTION] {}", prompt),
                 bio_state: "Reflexión activa.".to_string(),
+                bio_context: "[SYSTEM_STATE]\n\
+                              Adenosine: 0.30 (Baseline)\n\
+                              Cortisol: 0.10 (Calm)\n\
+                              Dopamine: 0.50 (Neutral)\n\
+                              Entropy: 0.50 (Balanced)\n\
+                              [GENOME_TRAITS]\n\
+                              Curiosity: 0.50\n\
+                              Stress_Res: 0.50\n\
+                              [FOCUS_VECTOR] Reference: 'Internal Monologue'".to_string(),
                 _somatic_state: "Sistema estable.".to_string(),
                 _long_term_memory: None,
                 _cpu_load: 10.0,
@@ -42,6 +51,7 @@ pub fn spawn_inner_voice(
                 dopamine: 0.5,
                 cortisol: 0.1,
                 _oxytocin: 0.5,
+                temperature_clamp: None, // Inner voice: no trauma override
             };
             
             let _ = tx_cortex.send(input);

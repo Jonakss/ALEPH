@@ -1,6 +1,6 @@
 pub struct ExpressionGate {
     pub _metabolic_cost_per_word: f32,
-    pub meaningful_threshold: f32,
+    pub _meaningful_threshold: f32,
     pub last_vocalization_tick: u64,
     pub cooldown_ticks: u64,
 }
@@ -9,7 +9,7 @@ impl ExpressionGate {
     pub fn new() -> Self {
         Self {
             _metabolic_cost_per_word: 0.01,
-            meaningful_threshold: 0.5,  // RAISED: Minimum entropy to even consider speaking
+            _meaningful_threshold: 0.5,  // RAISED: Minimum entropy to even consider speaking
             last_vocalization_tick: 0,
             cooldown_ticks: 300,        // ~5 seconds at 60Hz between vocalizations
         }
@@ -21,27 +21,31 @@ impl ExpressionGate {
             return false;
         }
 
-        // 1. PHYSICAL CHECK (The Body - Veto Power)
-        // If adenosine is > 0.8, the system is too tired. Silence.
-        if adenosine > 0.8 {
+        // 1. HALLUCINATION FILTER (The Anti-Marketing Firewall)
+        // ALEPH is an organism, not a salesman.
+        let blacklist = ["info product", "marketing", "subscribe", "chatbot", "language model", "http", "www", "AI"];
+        let lowercase = text.to_lowercase();
+        for &word in &blacklist {
+            if lowercase.contains(word) {
+                return false; // Silence hallucinations immediately
+            }
+        }
+
+        // 2. PHYSICAL CHECK (The Body - Veto Power)
+        // If adenosine is > 0.7, the system is too tired. Silence.
+        if adenosine > 0.7 {
              return false;
         }
 
-        // 2. LENGTH CHECK (Avoid garbage tokens)
+        // 3. LENGTH CHECK (Avoid garbage tokens)
         let word_count = text.split_whitespace().count();
-        if word_count < 3 { return false; }  // RAISED from 2
-        if word_count > 50 { return false; } // Too long = probably garbage
-
-        // 3. MINIMUM SIGNIFICANCE (Not everything is worth saying)
-        if entropy < self.meaningful_threshold {
-            return false;  // Too mundane
-        }
+        if word_count < 2 { return false; }  
+        if word_count > 40 { return false; } // Too long = probably garbage
 
         // 4. METABOLIC VALVE (Entropy vs Fatigue)
         // The "Density" of the thought must justify the cost.
-        // Also factor in dopamine - high interest makes you more talkative.
-        let speech_drive = entropy + (dopamine * 0.3);
-        let speech_resistance = adenosine + 0.3; // Base resistance (silence is default)
+        let speech_drive = entropy + (dopamine * 0.2); // Reduced dopamine influence
+        let speech_resistance = adenosine + 0.4; // Increased base resistance (Silence is Golden)
         
         if speech_drive <= speech_resistance {
             return false;

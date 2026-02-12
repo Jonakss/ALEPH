@@ -9,6 +9,7 @@ pub struct ActivityMonitor {
     last_keys: Vec<Keycode>,
 }
 
+#[allow(dead_code)]
 impl ActivityMonitor {
     pub fn new() -> Self {
         let device_state = DeviceState::new();

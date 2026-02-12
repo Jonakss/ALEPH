@@ -14,7 +14,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mode = args.get(1).map(|s| s.as_str()).unwrap_or("daemon");
 
     match mode {
-        "daemon" | "start" => {
+        "daemon" | "start" | "--headless" | "headless" => {
             // THE STAR (Headless Body)
             core::daemon::run()?;
         },

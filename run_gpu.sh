@@ -13,4 +13,6 @@ echo "CUDA_HOME: $CUDA_HOME"
 echo "CANDLE_CUDA_ARCH: $CANDLE_CUDA_ARCH"
 
 # Re-run with headless flag
-cargo run -- --headless
+cargo run -- --headless > aleph.log 2>&1 &
+echo "Daemon started in background. Logs: aleph.log"
+tail -f aleph.log

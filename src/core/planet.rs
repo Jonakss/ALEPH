@@ -8,14 +8,15 @@ use rand::Rng;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 
-const MODEL_FILE: &str = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"; 
-const TOKENIZER_FILE: &str = "tokenizer_tinyllama.json"; 
+const MODEL_FILE: &str = "models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"; 
+const TOKENIZER_FILE: &str = "models/tokenizer_tinyllama.json"; 
 
 // AXIOMS REMOVED: ALEPH is born naked. No instructions, only physics. 
 
 pub struct CortexInput {
     pub text: String,
-    pub bio_state: String,
+    pub bio_state: String, // Legacy debug string (keep for now)
+    pub bio_context: String, // NEW: Full Physiological Prompt
     pub _somatic_state: String,
     pub _long_term_memory: Option<String>,
     pub _cpu_load: f32,
@@ -26,10 +27,13 @@ pub struct CortexInput {
     pub dopamine: f32,
     pub cortisol: f32,
     pub _oxytocin: f32,
+    pub temperature_clamp: Option<f32>, // Firefighter Protocol override
 }
 
 pub struct CortexOutput {
-    pub text: String,
+    pub _text: String,
+    pub neural_echo: Vec<f32>, // Neural Echo (Logits)
+    pub synthesized_thought: Option<String>, // Resonant Word (from Semantic Field)
     pub _inference_latency_ms: u64,
 }
 
@@ -44,6 +48,8 @@ pub struct Planet {
     history: String, 
     // SPEECH GATING
     is_internal_monologue: bool,
+    // BIAS MATRIX
+    semantic_field: crate::core::field::SemanticField,
 }
 
 impl Planet {
@@ -66,8 +72,15 @@ impl Planet {
                         // 1. NEURO-MODULATION (Chemicals -> Hyperparameters)
                         
                         // DOPAMINE -> Temperature (Exploration/Plasticity)
-                        // Low Dopa = Cold/Rigid (0.1). High Dopa = Hot/Creative (1.2).
-                        let base_temp = 0.5 + (msg.dopamine * 0.7); 
+                        // DOPAMINE -> Temperature (Exploration/Plasticity)
+                        // Low Dopa = Cold. High Dopa = Hot.
+                        // ADENOSINE -> Fatigue dampens Temperature (Rigidity)
+                        let mut base_temp = 0.7 + (msg.dopamine * 0.5) - (msg.adenosine * 0.5);
+                        base_temp = base_temp.clamp(0.1, 2.0);
+                        // Firefighter Protocol: Clamp temperature
+                        if let Some(clamp) = msg.temperature_clamp {
+                            base_temp = base_temp.min(clamp);
+                        }
                         if msg.entropy > 0.9 {
                              // Panic override
                         }
@@ -96,17 +109,30 @@ impl Planet {
                                  120 
                              };
                              
-                             // Pass full chemical state to think_stream
+                             // Pass full chemical state to think_stream (NOW RETURNS Neural Echo)
                              core.think_stream(&msg.text, &msg.bio_state, msg._long_term_memory.as_deref(), available_tokens, &msg)
                         }));
 
-                        let response = match result {
-                             Ok(text) => text,
-                             Err(_) => "...sys_err...".to_string()
+                        let (echo, text_response) = match result {
+                             Ok(res) => res,
+                             Err(_) => (Vec::new(), "...sys_error...".to_string())
+                        };
+                        
+                        // Capture resonance from text_response if it's not empty?
+                        // Wait, think_stream returns (echo, text). Text IS the resonant word now.
+                        let synthesized = if text_response.is_empty() || text_response.starts_with("...") {
+                            None 
+                        } else {
+                            Some(text_response.clone())
                         };
                          
                         let latency_ms = start.elapsed().as_millis() as u64;
-                        let _ = output_tx.send(CortexOutput { text: response, _inference_latency_ms: latency_ms });
+                        let _ = output_tx.send(CortexOutput { 
+                            _text: text_response, // Still send as text for legacy logging
+                            neural_echo: echo, 
+                            synthesized_thought: synthesized,
+                            _inference_latency_ms: latency_ms 
+                        });
                     }
                 }
                 Err(e) => {
@@ -142,6 +168,19 @@ impl Planet {
         };
         
         let tokenizer = Tokenizer::from_file(TOKENIZER_FILE).map_err(|e| E::msg(format!("Error cargando tokenizador en {}: {}", TOKENIZER_FILE, e)))?;
+        
+        // LOAD SEMANTIC FIELD (Gravity Well)
+        let _ = tx.send(Thought::new(MindVoice::System, "📚 Semantic Field: Initializing...".to_string()));
+        let semantic_field = match crate::core::field::SemanticField::from_directory(std::path::Path::new("docs/"), &tokenizer, &device, 1.0) {
+            Ok(field) => {
+                 let _ = tx.send(Thought::new(MindVoice::System, "✅ Semantic Field: Online (Gravity: 1.0)".to_string()));
+                 field
+            },
+            Err(e) => {
+                 let _ = tx.send(Thought::new(MindVoice::System, format!("⚠️ Semantic Field Error: {}. Running with zero gravity.", e)));
+                 crate::core::field::SemanticField::from_directory(std::path::Path::new("docs/"), &tokenizer, &device, 0.0)?
+            }
+        };
 
         Ok(Self {
             model,
@@ -151,6 +190,7 @@ impl Planet {
             thought_tx: tx,
             history: String::new(), // Starts tabula rasa
             is_internal_monologue: false,
+            semantic_field,
         })
     }
 
@@ -161,51 +201,58 @@ impl Planet {
         Ok(model)
     }
 
-    fn think_stream(&mut self, input: &str, _bio_desc: &str, memory: Option<&str>, max_tokens: usize, chem: &CortexInput) -> String {
-        // RUMINATION DETECTION
-        if input.contains("[SELF REFLECTION]") || input.contains("[INTERNAL]") || input.contains("[RUMINATION]") {
+    fn think_stream(&mut self, input: &str, _bio_desc: &str, memory: Option<&str>, _max_tokens: usize, chem: &CortexInput) -> (Vec<f32>, String) {
+        // RUMINATION DETECTION (Legacy, keeping logic structure)
+        if input.contains("[SELF REFLECTION]") {
             self.is_internal_monologue = true;
-        } else {
-            self.is_internal_monologue = false;
         }
-        
-        // 1. EMPTY MIND (No Axiomatic Foundation)
-        // ALEPH starts tabula rasa. Identity emerges from interaction, not instruction.
-        
-        // Memory Injection: Echoes of the past
+
+        // Memory Injection
         let mem_str = if let Some(m) = memory {
             format!("<|system|>\nEcos de memoria: {}</s>\n", m)
         } else {
             String::new()
         };
         
-        let injection = format!("{}<|user|>\n{}</s>\n<|assistant|>\n", mem_str, input);
-
-        // 2. STABILITY (Rolling Context)
+        // Rolling Context
         if self.history.len() > 3000 {
-            self.history.clear();
+            let split_idx = self.history.len().saturating_sub(500);
+            self.history = self.history[split_idx..].to_string();
         }
+        
+        // INJECTION
+        let injection = if !input.is_empty() {
+             format!("{}\n{}\n[PERCEPT]\n> {}\n", mem_str, chem.bio_context, input)
+        } else {
+             format!("{}\n{}\n", mem_str, chem.bio_context)
+        };
         
         self.history.push_str(&injection);
 
         let prompt = self.history.clone();
         
-        let mut output = match self.generate(&prompt, max_tokens, chem) {
-            Ok(s) => s,
-            Err(_) => "...stimulus_overload...".to_string()
+        // LOBOTOMY PROTCOL: DO NOT GENERATE TEXT.
+        // Instead, PERCEIVE (Get Logits/Echo)
+        let (neural_echo, resonant_word) = match self.perceive(&prompt, chem) {
+            Ok((logits, word)) => (logits, word),
+            Err(e) => {
+                let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("❌ Neural Echo Failed: {}", e)));
+                (Vec::new(), None)
+            }
         };
 
-        // 3. POST-PROCESS FILTER (Minimal structural cleanup)
-        if let Some(pos) = output.find("<|") { output = output[..pos].to_string(); }
-        if let Some(pos) = output.find("</s>") { output = output[..pos].to_string(); }
+        // If Resonant Word is found, inject it into History?
+        // Maybe. For now, just return it.
+        // We do NOT update history with the word, because we didn't "decide" to say it yet.
+        // The Daemon handles the feedback loop if spoken.
         
-        // Final trim
-        output = output.trim().to_string();
-        
-        // 4. FEEDBACK LOOP (Consistent with ChatML)
-        self.history.push_str(&format!("{}</s>\n", output));
-        
-        output
+        let text_out = if let Some(ref w) = resonant_word {
+             w.clone() 
+        } else {
+             String::new() 
+        };
+
+        (neural_echo, text_out)
     }
 
     // 🔹 BIOLOGICAL TENSOR OPERATIONS 🔹
@@ -216,21 +263,58 @@ impl Planet {
         // If stress is high, we inject Gaussian noise into the decision surface.
         // This simulates "shaking" or "racing thoughts".
         if chem.cortisol > 0.4 {
-            let noise_scale = (chem.cortisol - 0.4) * 3.0; // 0.0 - 1.8
-            let noise = Tensor::randn(0.0, noise_scale as f64, distorted_logits.shape(), &self.device)?;
+            let noise_scale = (chem.cortisol - 0.4) * 0.5; 
+            let noise = Tensor::randn(0.0, noise_scale as f64, distorted_logits.shape(), &self.device)?
+                        .to_dtype(distorted_logits.dtype())?; // Fix: Cast to match Logits (F32)
             distorted_logits = (distorted_logits + noise)?;
         }
         
+        // 2. ADENOSINE: Brain Fog (Global Inhibition)
+        // If fatigued, we dampen the peaks. Lowers confidence.
         // 2. ADENOSINE: Brain Fog (Global Inhibition)
         // If fatigued, we dampen the peaks. Lowers confidence.
         if chem.adenosine > 0.5 {
             let dampening = 1.0 - ((chem.adenosine - 0.5)); // 1.0 -> 0.5
             distorted_logits = (distorted_logits * dampening as f64)?;
         }
+
+        // 3. SEMANTIC GRAVITY (The Bias Matrix)
+        // Pull thoughts towards the documentation's probability space.
+        distorted_logits = self.semantic_field.apply(distorted_logits)?;
         
         Ok(distorted_logits)
     }
 
+    /// LOBOTOMY MODE: Process input, return probability cloud (Neural Echo) AND Resonant Word.
+    /// Does NOT generate text.
+    fn perceive(&mut self, prompt: &str, chem: &CortexInput) -> Result<(Vec<f32>, Option<String>)> {
+        let tokens = self.tokenizer.encode(prompt, true).map_err(E::msg)?;
+        let token_ids = tokens.get_ids().to_vec();
+        if token_ids.is_empty() { return Ok((Vec::new(), None)); }
+
+        let input_tensor = Tensor::new(token_ids.as_slice(), &self.device)?.unsqueeze(0)?;
+        
+        // Forward pass
+        let logits = self.model.forward(&input_tensor, 0)?;
+        let mut logits = logits.squeeze(0)?.to_dtype(DType::F32)?;
+        
+        if logits.rank() == 2 {
+            let seq_len = logits.dim(0)?;
+            logits = logits.i(seq_len - 1)?;
+        }
+        
+        // 🔹 APPLY SEMANTIC MATRIX (Field Bias) 🔹
+        logits = self.apply_semantic_matrix(logits, chem)?;
+        
+        // CHECK RESONANCE
+        let resonance = self.semantic_field.find_resonance(&logits).unwrap_or(None);
+        
+        // Return raw logits as Neural Echo
+        let echo = logits.to_vec1::<f32>()?;
+        Ok((echo, resonance))
+    }
+
+    #[allow(dead_code)]
     fn generate(&mut self, prompt: &str, max_tokens: usize, chem: &CortexInput) -> Result<String> {
         // Normalize prompt? No, raw stream.
         

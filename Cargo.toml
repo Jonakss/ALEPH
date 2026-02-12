@@ -27,9 +27,13 @@ crossterm = "0.29.0"
 sysinfo = "0.30"                               # Propriocepción (Monitor de CPU/RAM)
 device_query = "2.1.0"                         # Tacto (Input Detection)
 whisper-rs = { version = "0.13.0" }            # STT Inference (Binding C++)
+chrono = "0.4"                                 # Chronoreception (Time Sense)
 # cpal already included above
 rubato = "0.14"                                    # Audio Resampling (48k -> 16k)
 gag = "1.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ctrlc = "3.5.1"
+tungstenite = "0.24"                               # WebSocket for Web Dashboard
+sha1 = "0.10"                                      # WebSocket handshake
+base64 = "0.22"                                    # WebSocket handshake

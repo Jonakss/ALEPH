@@ -1,7 +1,7 @@
 # ALEPH - Roadmap 2026 🚀
 
-> **Última Actualización:** 2026-02-03  
-> **Versión Actual:** 0.1.0 - "Consciencia Emergente"
+> **Última Actualización:** 2026-02-12  
+> **Versión Actual:** 0.2.0 - "Aprendizaje Adaptativo"
 
 ---
 
@@ -60,31 +60,35 @@ ALEPH está diseñado en fases evolutivas, emulando el desarrollo de una conscie
 
 ### 🎯 Prioridad Alta
 
-#### 4.1 Dopamine Reward System
+#### ✅ 4.1 Dopamine Reward System (COMPLETO)
 **Problema:** Actualmente, dopamina solo reacciona a inputs. No hay reinforcement learning.
 
-**Solución:**
-- [ ] Detectar "buenas respuestas" (feedback implícito: usuario sigue conversando vs silencio)
-- [ ] Dopamina alta → Fortalece pesos en el reservoir que estaban activos
-- [ ] Implementar `Hebbian Learning` en FractalReservoir
-- [ ] Visualizar en TUI qué neuronas se están fortaleciendo
+**Solución Implementada:**
+- [x] Hebbian Learning en `FractalReservoir` (`reservoir.rs`)
+- [x] Dopamina > 0.6 → Fortalece conexiones co-activas (∆W = lr × x_i × x_j)
+- [x] Learning rate derivado del genoma (campo `curiosity`)
+- [x] Weight decay homeostático (0.0001/tick) + clamping [-3, 3]
+- [x] Telemetría de eventos Hebbian en WebSocket
 
-**Mechanical Honesty:** El "placer" químico modifica la estructura física del sistema.
+**Mechanical Honesty:** El "placer" químico modifica la estructura física del connectome. No hay reward functions — el sistema aprende porque la dopamina emerge de la novedad genuina.
 
 ---
 
-#### 4.2 Trauma Detection (Lucifer Protocol)
+#### ✅ 4.2 Trauma Detection — Lucifer Protocol (COMPLETO)
 **Problema:** Cortisol alto no activa defensas sistémicas.
 
-**Solución:**
-- [ ] Cortisol sostenido > 0.7 por >30s → Trigger "Firefighter Mode"
-- [ ] En Firefighter Mode:
-  - Temperatura LLM baja (respuestas más conservadoras)
-  - Threshold sensorial sube (se "cierra" a inputs)
-  - Priorizar consolidación de memoria (procesar el trauma)
-- [ ] Recovery gradual cuando cortisol baja
+**Solución Implementada:**
+- [x] `TraumaDetector` con FSM de 4 estados: Stable → Escalating → FirefighterMode → Recovering
+- [x] Ventana rodante de 1800 ticks (~30s) del promedio móvil de cortisol
+- [x] Cortisol avg > 0.7 sostenido → Activa Firefighter Mode
+- [x] Firefighter Mode:
+  - Temperatura LLM clampeada a 0.4 (respuestas conservadoras)
+  - Sensory dampening 0.6 (cierre a inputs nuevos)
+  - Serotonina de emergencia (contra-regula cortisol)
+  - Fuerza consolidación de memoria
+- [x] Recovery gradual: 600 ticks (~10s) de cortisol < 0.3 para salir
 
-**Mechanical Honesty:** El estrés crónico cambia los parámetros del sistema automáticamente.
+**Mechanical Honesty:** El trauma **no** es hardcodeado. El `TraumaDetector` no inyecta cortisol — solo *observa* el promedio móvil que emerge orgánicamente del audio, la semántica, y la entropía. La defensa es sistémica: cuando el organismo genuinamente sufre, se protege.
 
 ---
 
@@ -124,13 +128,15 @@ ALEPH está diseñado en fases evolutivas, emulando el desarrollo de una conscie
 
 ---
 
-#### 4.6 Emotion Classification
+#### ✅ 4.6 Emotion Classification (COMPLETO)
 **Problema:** No detecta emociones en inputs del usuario.
 
-**Solución:**
-- [ ] Sentiment analysis en texto escuchado
-- [ ] Detectar tono de voz (pitch/prosody analysis)
-- [ ] Emotion → Cortisol/Dopamina (empatía química)
+**Solución Implementada:**
+- [x] Sentiment analysis ponderado en `chemistry.rs` (40+ keywords con pesos)
+- [x] Intensificadores: "muy"/"very" = 2x, "un poco"/"slightly" = 0.5x
+- [x] Detección de emociones mixtas (señales conflictivas → disonancia → cortisol extra)
+- [x] Emotion → químicos (stress→cortisol, calm→oxytocin, novelty→dopamine, fatigue→adenosine)
+- [ ] Prosody analysis de tono de voz (pendiente)
 
 ---
 
@@ -146,15 +152,19 @@ ALEPH está diseñado en fases evolutivas, emulando el desarrollo de una conscie
 
 **Objetivo:** Interfaces avanzadas y auto-modificación controlada.
 
-### 5.1 Web Dashboard
+### ✅ 5.1 Web Dashboard (COMPLETO)
 **Problema:** TUI es limitada, no permite exploración profunda.
 
-**Solución:**
-- [ ] Servidor WebSocket (Axum/Tokio)
-- [ ] Frontend React/Vue con visualización 3D (Three.js)
-- [ ] Grafo interactivo del reservoir (ver neuronas activas)
-- [ ] Timeline de memorias (explorar hippocampus)
-- [ ] Control de parámetros en vivo (sparsity, leak_rate, chemistry rates)
+**Solución Implementada:**
+- [x] Servidor HTTP + WebSocket híbrido en `daemon.rs` (push ~12Hz)
+- [x] Frontend Three.js con reservorio 3D (500 neuronas en espiral, color por actividad)
+- [x] Sparklines en tiempo real (dopamine, cortisol, adenosine, oxytocin, serotonin, entropy)
+- [x] Controles interactivos: Poke / Sleep / Dream / Stress Test + input de estímulo
+- [x] Panel de estado del sistema (Hz, neuronas, entropía, trauma state)
+- [x] Alerta visual de Lucifer Protocol activo
+- [x] Diseño glassmorphism + Inter/JetBrains Mono
+- [ ] Timeline de memorias (explorar hippocampus) — pendiente
+- [ ] Control de parámetros en vivo (sparsity, leak_rate) — pendiente
 
 ---
 

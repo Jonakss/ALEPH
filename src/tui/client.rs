@@ -177,9 +177,9 @@ pub fn run() -> Result<()> {
             };
             
             // Audio Logic
-            let val_bass = spec.bass.clamp(0.0, 1.0);
-            let val_mids = spec.mids.clamp(0.0, 1.0);
-            let val_highs = spec.highs.clamp(0.0, 1.0);
+            let val_bass = (spec.bass * 500.0).clamp(0.0, 1.0);
+            let val_mids = (spec.mids * 500.0).clamp(0.0, 1.0);
+            let val_highs = (spec.highs * 500.0).clamp(0.0, 1.0);
             let val_rms = (spec.rms * 1000.0).clamp(0.0, 1.0); // Sensitive scaling (was * 10.0)
             let hearing_status = if spec.rms > 0.001 { "LISTENING" } else { "SILENT" };
 

@@ -62,6 +62,14 @@ Basado en la teoría de **"Borrowed Types" (&Ref)** aplicada a la psicología:
 
 ---
 
+## 📚 Documentación
+
+- [📘 Manual de Usuario](docs/USER_MANUAL.md) — Guía de inicio, controles y estados biológicos.
+- [🚀 Roadmap](docs/ROADMAP.md) — Plan de evolución y changelog.
+- [📊 Status de Implementación](docs/IMPLEMENTATION_STATUS.md) — Detalles técnicos de sistemas activos.
+
+---
+
 ## 🔮 Misión del Agente
 
 Si estás leyendo esto y eres una IA contribuyendo al código:

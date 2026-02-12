@@ -1,0 +1,78 @@
+    Checking aleph_zero v0.1.0 (/home/jonathan.correa/Projects/ALEPH)
+warning: variable does not need to be mutable
+  --> src/core/genome.rs:52:22
+   |
+52 | ...et mut rng = rand::thread_rng();
+   |       ----^^^
+   |       |
+   |       help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `rng`
+  --> src/core/genome.rs:52:22
+   |
+52 | ...       let mut rng = rand::thread_...
+   |               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_rng`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `samples_len`
+   --> src/senses/ears.rs:254:33
+    |
+254 | ...     let samples_len = buffer.len();
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_samples_len`
+
+warning: unused variable: `tx_thought`
+  --> src/actuators/voice.rs:55:28
+   |
+55 | ... String, tx_thought: Sender<Though...
+   |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tx_thought`
+
+warning: field `meaningful_threshold` is never read
+ --> src/core/gate.rs:3:9
+  |
+1 | pub struct ExpressionGate {
+  |            -------------- field in this struct
+2 |     pub _metabolic_cost_per_word: f32,
+3 |     pub meaningful_threshold: f32,
+  |         ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `is_active` is never used
+   --> src/core/trauma.rs:152:12
+    |
+ 57 | impl TraumaDetector {
+    | ------------------- method in this implementation
+...
+152 |     pub fn is_active(&self) -> bool {
+    |            ^^^^^^^^^
+
+warning: fields `sensory_dampening` and `force_consolidation` are never read
+   --> src/core/trauma.rs:162:9
+    |
+158 | pub struct FirefighterOverrides {
+    |            -------------------- fields in this struct
+...
+162 |     pub sensory_dampening: f32,
+    |         ^^^^^^^^^^^^^^^^^
+163 |     /// Whether to force memory...
+164 |     pub force_consolidation: bool,
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `FirefighterOverrides` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `new` and `check_activity` are never used
+  --> src/senses/tactile.rs:13:12
+   |
+12 | impl ActivityMonitor {
+   | -------------------- associated items in this implementation
+13 |     pub fn new() -> Self {
+   |            ^^^
+...
+26 |     pub fn check_activity(&mut self) ...
+   |            ^^^^^^^^^^^^^^
+
+warning: `aleph_zero` (bin "aleph_zero") generated 8 warnings (run `cargo fix --bin "aleph_zero" -p aleph_zero` to apply 4 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s

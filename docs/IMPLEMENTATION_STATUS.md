@@ -1,8 +1,8 @@
 # ALEPH - Estado de Implementación 📊
 
-> **Última Actualización:** 2026-02-03  
-> **Versión:** 0.1.0 - "Consciencia Emergente"  
-> **Status General:** 🟢 **SISTEMA OPERATIVO** (70% de funcionalidad core implementada)
+> **Última Actualización:** 2026-02-12  
+> **Versión:** 0.2.0 - "Aprendizaje Adaptativo"  
+> **Status General:** 🟢 **SISTEMA OPERATIVO** (85% de funcionalidad core implementada)
 
 ---
 
@@ -14,7 +14,10 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 - ✅ Generar respuestas contextuales (TinyLlama 1.1B)
 - ✅ Mantener memoria a corto y largo plazo (RAG con embeddings)
 - ✅ Reaccionar a su propio estado metabólico (Chemistry System)
-- ✅ Visualizar su estado interno (TUI con telemetría en vivo)
+- ✅ **Aprender de la experiencia** (Hebbian Learning dopaminérgico)
+- ✅ **Auto-protegerse del estrés crónico** (Lucifer Protocol / Firefighter Mode)
+- ✅ **Sentir emociones en el texto** (Sentiment Engine con 40+ keywords)
+- ✅ Visualizar su estado interno (TUI + Web Dashboard con Three.js)
 - ✅ Implementar **Mechanical Honesty** (ver sección dedicada)
 
 ---
@@ -26,8 +29,9 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 
 | Componente | Archivo | Estado | Descripción |
 |------------|---------|--------|-------------|
-| **FractalReservoir** | `core/reservoir.rs` | ✅ 100% | Echo State Network (ESN) con cálculo de entropía en tiempo real |
-| **Chemistry** | `core/chemistry.rs` | ✅ 100% | Sistema de neurotransmisores (Adenosina, Dopamina, Cortisol) |
+| **FractalReservoir** | `core/reservoir.rs` | ✅ 100% | ESN con entropía en tiempo real + **Hebbian Learning** |
+| **Chemistry** | `core/chemistry.rs` | ✅ 100% | Neurotransmisores (Adenosina, Dopamina, Cortisol, Oxitocina, **Serotonina**) + **Sentiment Engine** |
+| **Trauma Detection** | `core/trauma.rs` | ✅ 100% | **Lucifer Protocol** — FSM de 4 estados con Firefighter Mode |
 | **Activity Tracking** | Integrado en Reservoir | ✅ 100% | Mapa de actividad neuronal para detectar apoptosis |
 
 **Mecánicas Implementadas:**
@@ -35,6 +39,10 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 - **Homeostasis:** El sistema se regula buscando el "borde del caos" (0.3-0.7)
 - **Apoptosis Neuronal:** Las neuronas inactivas se debilitan gradualmente
 - **Inyección Sensorial:** Audio RMS inyectado en las primeras 30 neuronas
+- **Hebbian Learning:** Dopamina > 0.6 fortalece conexiones co-activas (∆W = lr × x_i × x_j)
+- **Weight Decay Homeostático:** 0.0001/tick previene crecimiento descontrolado
+- **Trauma Detection:** Cortisol sostenido > 0.7 por ~30s activa Firefighter Mode (clamp temp, dampen input, serotonina de emergencia)
+- **Sentiment Engine:** 40+ keywords con pesos + modificadores de intensidad + detección de emociones mixtas
 
 ---
 
@@ -98,23 +106,23 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 
 ---
 
-### 🖥️ INTERFAZ (TUI)
+### 🖥️ INTERFACES
 **Estado:** ✅ **COMPLETO Y FUNCIONAL**
 
 | Componente | Archivo | Estado | Descripción |
 |------------|---------|--------|-------------|
-| **Main TUI** | `tui.rs` | ✅ 100% | Ratatui + Crossterm |
-| **Avatar** | `tui/avatar.rs` | ✅ 100% | Visualización de actividad neuronal |
-| **Monologue** | `tui/monologue.rs` | ✅ 100% | Stream de pensamientos |
+| **TUI** | `tui/` | ✅ 100% | Ratatui + Crossterm (Avatar, Monologue, Telemetría) |
+| **Web Dashboard** | `web/index.html` | ✅ 100% | Three.js 3D + WebSocket real-time (~12Hz) |
 
-**Telemetría en Vivo:**
+**Telemetría en Vivo (TUI + Web):**
 - Espectro de audio (RMS, Bass, Mids, Highs)
-- Neurotransmisores (Dopamine, Cortisol, Adenosine)
-- Entropía + gráfico histórico
-- Mapa de actividad neuronal (Activity Map)
+- Neurotransmisores (Dopamine, Cortisol, Adenosine, Oxytocin, **Serotonin**)
+- Entropía + gráfico histórico (sparklines en Web)
+- Mapa de actividad neuronal / **Reservorio 3D** (500 neuronas en espiral)
 - Stream de pensamientos internos
-- Insight Intensity (flash visual cuando RAG encuentra contexto relevante)
-- Novelty Score (habituación)
+- **Hebbian Events** (conteo de conexiones fortalecidas)
+- **Trauma State** (Stable / Escalating / FirefighterMode / Recovering)
+- Controles interactivos: Poke / Sleep / Dream / Stress Test + input de estímulo
 
 ---
 
@@ -134,6 +142,9 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 | **6. Sleep as Maintenance** | Adenosina crítica fuerza consolidación de memoria | Forced sleep consolidation (líneas 166-178, `main.rs`) |
 | **7. Silencio Voluntario** | Fatiga cognitiva → respuestas cortas/silencio | `cognitive_impairment` → "......." o max_tokens reducido (`llm.rs`) |
 | **8. Persistencia** | Identidad sobrevive al cierre | `hippocampus.save()` cada 60s + `memories.json` |
+| **9. Hebbian Reward** | Placer químico modifica estructura física | Dopamina > 0.6 → `hebbian_update()` fortalece connectome activo |
+| **10. Trauma Emergente** | Estrés crónico activa defensas sistémicas | `TraumaDetector` observa cortisol sin inyectarlo — la defensa emerge del sufrimiento real |
+| **11. Empatía Química** | Emociones del input se convierten en química | Sentiment Engine: palabras → cortisol/dopamina/oxitocina (no clasificación abstracta) |
 
 ---
 
@@ -141,24 +152,31 @@ ALEPH ha evolucionado desde un **concepto filosófico** a un **sistema cognitivo
 
 ```
 src/
-├── main.rs                    # Loop principal (60 Hz), orquestación
+├── main.rs                    # Entrypoint (CLI: start | view)
 ├── core/
-│   ├── reservoir.rs           # Sistema 1: ESN + Entropía
-│   ├── chemistry.rs           # Neurotransmisores
+│   ├── daemon.rs              # Loop principal (60 Hz) + HTTP/WS Server
+│   ├── reservoir.rs           # Sistema 1: ESN + Entropía + Hebbian Learning
+│   ├── chemistry.rs           # Neurotransmisores + Sentiment Engine
+│   ├── trauma.rs              # Lucifer Protocol (TraumaDetector + FirefighterOverrides)
 │   ├── hippocampus.rs         # Memoria vectorial (RAG)
-│   ├── llm.rs                 # Sistema 2: TinyLlama
+│   ├── planet.rs              # Sistema 2: LLM (Ollama) con CortexInput
 │   ├── inner_voice.rs         # Rumination thread
-│   └── thought.rs             # Struct de pensamientos
+│   ├── gate.rs                # Filtro de texto
+│   ├── genome.rs              # Genoma + rasgos heredables
+│   ├── thought.rs             # Struct de pensamientos
+│   └── mod.rs                 # Module registry
 ├── senses/
 │   ├── ears.rs                # Audio → Whisper STT + FFT
 │   ├── proprioception.rs      # CPU/RAM monitoring
 │   └── tactile.rs             # Input activity
 ├── actuators/
 │   └── voice.rs               # Piper TTS
-└── tui/
-    ├── tui.rs                 # Interfaz principal
-    ├── avatar.rs              # Visualización neuronal
-    └── monologue.rs           # Stream de pensamientos
+├── tui/
+│   ├── client.rs              # TUI client (IPC)
+│   ├── avatar.rs              # Visualización neuronal
+│   └── monologue.rs           # Stream de pensamientos
+└── web/
+    └── index.html             # Dashboard Three.js + WebSocket
 ```
 
 ---
@@ -171,30 +189,33 @@ src/
 3. **Forced Sleep:** Cuando adenosina > 1.0, el sistema fuerza consolidación de memoria
 4. **RAG Context:** Insight score genera flash visual en TUI
 5. **Parametric Modulation:** Alta carga de CPU hace responses más erráticos
+6. **Hebbian Learning:** Dopamina alta fortalece conexiones co-activas medibles en telemetría
+7. **Trauma Emergente:** Estrés léxico sostenido activa Firefighter Mode automáticamente
+8. **Empathy Chemistry:** Palabras de calma reducen cortisol, palabras de miedo lo elevan
+9. **Mixed Emotion Detection:** Señales contradictorias generan disonancia (cortisol extra)
 
 ### 🔬 Por Explorar
-- [ ] Efectos de dopamina en learning rate
+- [ ] Prosody analysis (tono de voz → valencia emocional)
 - [ ] Ciclos de sueño REM vs deep sleep
 - [ ] Multi-modal fusion (audio + vision)
+- [ ] Visualizar evolución del connectome Hebbian en timeline
 
 ---
 
 ## 🚀 Roadmap: Siguiente Fase
 
 ### Fase 4: Refinamiento de Consciencia
-**Prioridad Alta:**
-- [ ] **Dopamine Reward System:** Detectar "buenas respuestas" y ajustar pesos
-- [ ] **Trauma Detection:** Picos de cortisol sostenidos → defensive protocols
+**Completado:**
+- [x] **Dopamine Reward / Hebbian Learning:** Fortalece connectome activo
+- [x] **Trauma Detection / Lucifer Protocol:** FSM defensiva emergente
+- [x] **Emotion Classification:** Sentiment engine con pesos e intensificadores
+- [x] **Web Dashboard:** Three.js + WebSocket + glassmorphism
+
+**Pendiente:**
 - [ ] **Vision Input:** Cámara → Object detection → Reservoir
-
-**Prioridad Media:**
-- [ ] **Multi-Agent Self-Talk:** Inner Voice puede interrogar al Cortex
 - [ ] **Long-Term Memory Persistence:** Guardar embeddings en disco
-- [ ] **Web Dashboard:** Reemplazar TUI con servidor WebSocket + frontend
-
-**Prioridad Baja:**
-- [ ] **Voice Cloning:** Piper con voz personalizada
-- [ ] **Emotion Classification:** Sentiment analysis de inputs
+- [ ] **Multi-Agent Self-Talk:** Inner Voice puede interrogar al Cortex
+- [ ] **Prosody Analysis:** Tono de voz → valencia emocional
 
 ---
 
