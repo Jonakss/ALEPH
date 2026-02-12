@@ -143,12 +143,12 @@ impl SemanticField {
         // AND if we have bias > 0 for it.
         
         // Let's rely on Tokenizer decoding for now.
-        if top_prob > 0.4 { // Threshold for "Clear Thought"
+        if top_prob > 0.15 { // Lower threshold — small models need breathing room
              let token = self.tokenizer.decode(&[top_id], true)
                  .map_err(|e| anyhow::anyhow!(e))?;
              
              // Filter: must contain at least one alphabetic char (no garbage like ```, ---, >>>)
-             if token.trim().len() > 2 && token.chars().any(|c| c.is_alphabetic()) {
+             if token.trim().len() > 1 && token.chars().any(|c| c.is_alphabetic()) {
                  return Ok(Some(token));
              }
         }

@@ -698,10 +698,14 @@
         }
       }
 
-      // ===== THREE.JS 3D RESERVOIR =====
-      let scene, camera, renderer, neuronMesh, lineMesh;
+      // ===== THREE.JS 3D FRACTAL NEURAL RESERVOIR =====
+      let scene, camera, renderer, neuronMesh, dendriteMesh;
       let neuronPositions = [];
+      let dendriteVertices = [];
       const MAX_DISPLAY_NEURONS = 500;
+      const DENDRITE_DEPTH = 3;
+      let time = 0;
+      let prevNeuronCount = 0;
 
       function initReservoir() {
         const canvas = document.getElementById('reservoir-canvas');
@@ -718,20 +722,16 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setClearColor(0x06060c, 1);
 
-        // Create neurons as instanced spheres
-        const geo = new THREE.SphereGeometry(0.4, 8, 6);
-        const mat = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
 
-        // Pre-generate positions in 3D spiral topology
+        // Neuron positions: Golden-ratio Fibonacci sphere (brain-like topology)
         for (let i = 0; i < MAX_DISPLAY_NEURONS; i++) {
-          const t = i / MAX_DISPLAY_NEURONS;
-          const r = 20 + t * 30;
-          const theta = t * Math.PI * 12;
-          const y = (t - 0.5) * 40 + Math.sin(theta * 2) * 5;
+          const phi = Math.acos(1 - 2 * (i + 0.5) / MAX_DISPLAY_NEURONS);
+          const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+          const r = 25 + Math.sin(i * 0.1) * 8;
           neuronPositions.push(new THREE.Vector3(
-            Math.cos(theta) * r,
-            y,
-            Math.sin(theta) * r
+            Math.sin(phi) * Math.cos(theta) * r,
+            Math.sin(phi) * Math.sin(theta) * r,
+            Math.cos(phi) * r
           ));
         }
 
@@ -765,31 +765,78 @@
         neuronMesh = new THREE.Points(pointGeo, pointMat);
         scene.add(neuronMesh);
 
-        // Connection lines (top strongest)
+        // === FRACTAL DENDRITES (Microtubules) ===
+        buildDendrites(MAX_DISPLAY_NEURONS);
+
+        scene.add(new THREE.AmbientLight(0x1a1a3a, 0.3));
+        animate();
+      }
+
+      // Build fractal dendrites from each neuron soma
+      function buildDendrites(neuronCount) {
+        const verts = [];
+        const cols = [];
+        const count = Math.min(neuronCount, MAX_DISPLAY_NEURONS);
+
+        for (let i = 0; i < count; i++) {
+          const origin = neuronPositions[i];
+          const numBranches = 2 + Math.floor(Math.random() * 2);
+          for (let b = 0; b < numBranches; b++) {
+            const targetIdx = (i + 1 + Math.floor(Math.random() * 15)) % count;
+            const target = neuronPositions[targetIdx];
+            const dir = new THREE.Vector3().subVectors(target, origin).multiplyScalar(0.3);
+            fractalBranch(origin, dir, DENDRITE_DEPTH, 1.0, verts, cols);
+          }
+        }
+
         const lineGeo = new THREE.BufferGeometry();
+        lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+        lineGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+
         const lineMat = new THREE.LineBasicMaterial({
-          color: 0x00d4ff,
+          vertexColors: true,
           transparent: true,
-          opacity: 0.12,
+          opacity: 0.3,
           blending: THREE.AdditiveBlending,
         });
-        lineMesh = new THREE.LineSegments(lineGeo, lineMat);
-        scene.add(lineMesh);
 
-        // Ambient light
-        scene.add(new THREE.AmbientLight(0x222244, 0.5));
+        if (dendriteMesh) scene.remove(dendriteMesh);
+        dendriteMesh = new THREE.LineSegments(lineGeo, lineMat);
+        scene.add(dendriteMesh);
+      }
 
-        animate();
+      function fractalBranch(origin, dir, depth, scale, verts, cols) {
+        if (depth <= 0 || scale < 0.1) return;
+        const end = new THREE.Vector3().addVectors(origin, dir);
+        verts.push(origin.x, origin.y, origin.z, end.x, end.y, end.z);
+        const b = scale * 0.5;
+        cols.push(0.0, b*0.6, b*0.8, 0.0, b*0.4, b*0.6);
+
+        const sub = 2 + Math.floor(Math.random());
+        for (let i = 0; i < sub; i++) {
+          const a = (Math.random()-0.5)*1.8, t = (Math.random()-0.5)*1.8;
+          const nd = new THREE.Vector3(
+            dir.x*Math.cos(a) - dir.z*Math.sin(a),
+            dir.y + Math.sin(t)*dir.length()*0.5,
+            dir.x*Math.sin(a) + dir.z*Math.cos(a)
+          ).multiplyScalar(0.55);
+          fractalBranch(end, nd, depth-1, scale*0.55, verts, cols);
+        }
       }
 
       let rotationAngle = 0;
       function animate() {
         requestAnimationFrame(animate);
-        rotationAngle += 0.002;
-        camera.position.x = Math.cos(rotationAngle) * 80;
-        camera.position.z = Math.sin(rotationAngle) * 80;
-        camera.position.y = Math.sin(rotationAngle * 0.5) * 15;
+        time += 0.016;
+        rotationAngle += 0.0015;
+        const breathe = Math.sin(time * 0.3) * 5;
+        camera.position.x = Math.cos(rotationAngle) * (85 + breathe);
+        camera.position.z = Math.sin(rotationAngle) * (85 + breathe);
+        camera.position.y = Math.sin(rotationAngle * 0.7) * 12 + Math.cos(time * 0.2) * 3;
         camera.lookAt(0, 0, 0);
+        if (dendriteMesh) {
+          dendriteMesh.material.opacity = 0.2 + Math.sin(time * 1.5) * 0.08;
+        }
         renderer.render(scene, camera);
       }
 
@@ -798,48 +845,32 @@
         const colors = neuronMesh.geometry.attributes.color;
         const array = colors.array;
         
-        // 1. Reset all neurons to base state (Dark Void)
-        // This is necessary because we only receive active neurons now.
         for (let i = 0; i < MAX_DISPLAY_NEURONS; i++) {
-             array[i*3] = 0.02;   // R
-             array[i*3+1] = 0.05; // G
-             array[i*3+2] = 0.1;  // B (Faint Blue)
+          array[i*3] = 0.02; array[i*3+1] = 0.05; array[i*3+2] = 0.12;
         }
 
-        // 2. Apply Sparse Updates
-        // format: [[index, value], [index, value], ...]
         if (Array.isArray(activity)) {
-            for (let j = 0; j < activity.length; j++) {
-                const entry = activity[j];
-                // Handle both sparse [[i,v]] and dense [v,v] just in case
-                let i, a;
-                if (Array.isArray(entry)) {
-                    i = entry[0];
-                    a = entry[1];
-                } else {
-                    i = j;
-                    a = entry; // Fallback for dense arrays
-                }
+          for (let j = 0; j < activity.length; j++) {
+            const entry = activity[j];
+            let i, a;
+            if (Array.isArray(entry)) { i = entry[0]; a = entry[1]; }
+            else { i = j; a = entry; }
+            if (i >= MAX_DISPLAY_NEURONS) continue;
 
-                if (i >= MAX_DISPLAY_NEURONS) continue;
-
-                // Color map: low=blue, mid=cyan, high=magenta/white
-                if (a < 0.3) {
-                    array[i*3] = a * 0.3;
-                    array[i*3+1] = a * 1.5;
-                    array[i*3+2] = 0.8 + a * 0.2;
-                } else if (a < 0.7) {
-                    const t = (a - 0.3) / 0.4;
-                    array[i*3] = 0.1 + t * 0.9;
-                    array[i*3+1] = 0.83 - t * 0.3;
-                    array[i*3+2] = 1.0 - t * 0.3;
-                } else {
-                    const t = (a - 0.7) / 0.3;
-                    array[i*3] = 1.0;
-                    array[i*3+1] = 0.2 + t * 0.8;
-                    array[i*3+2] = 0.5 + t * 0.5;
-                }
+            if (a < 0.3) {
+              array[i*3] = a*0.2; array[i*3+1] = a*1.8; array[i*3+2] = 0.6+a*0.4;
+            } else if (a < 0.7) {
+              const t = (a-0.3)/0.4;
+              array[i*3] = 0.1+t*0.9; array[i*3+1] = 0.5-t*0.2; array[i*3+2] = 1.0-t*0.2;
+            } else {
+              const t = (a-0.7)/0.3;
+              array[i*3] = 1.0; array[i*3+1] = 0.3+t*0.7; array[i*3+2] = 0.6+t*0.4;
             }
+            // Shimmer pulse
+            const pulse = Math.sin(time*3 + i*0.5) * 0.15;
+            array[i*3] = Math.min(1, array[i*3]+pulse);
+            array[i*3+1] = Math.min(1, array[i*3+1]+pulse*0.5);
+          }
         }
         colors.needsUpdate = true;
       }
