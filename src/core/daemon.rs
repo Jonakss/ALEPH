@@ -36,6 +36,7 @@ struct WebTelemetry {
     audio_spectrum: AudioSpectrum,
     reservoir_activity: Vec<f32>,
     current_state: String,
+    thoughts: Vec<String>,
     trauma_state: String,
     hebbian_events: u32,
     reservoir_size: usize,
@@ -140,7 +141,7 @@ pub fn run() -> Result<()> {
                                 let key = key_line.split(':').nth(1).unwrap_or("").trim();
                                 
                                 // WebSocket accept key = base64(SHA1(key + GUID))
-                                let magic = "258EAFA5-E914-47DA-95CA-5AB5DC764D73";
+                                let magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                                 let combined = format!("{}{}", key, magic);
                                 
                                 use sha1::Digest;
@@ -187,16 +188,17 @@ pub fn run() -> Result<()> {
                                     let mut headers = [0u8; 2];
                                     match stream.read(&mut headers) {
                                         Ok(0) => {
-                                            // Normal Close
-                                            // println!("👋 WS Client Disconnected (EOF)");
+                                            println!("👋 WS Disconnected (Client Closed)"); 
                                             break; 
                                         }, 
                                         Ok(n) if n < 2 => {
-                                             println!("❌ WS Partial Read detected ({}), dropping.", n);
+                                             println!("❌ WS Partial Read ({}), Dropping.", n);
                                              break;
                                         },
                                         Err(e) => {
-                                            println!("❌ WS Read Error: {}", e);
+                                            if e.kind() != std::io::ErrorKind::WouldBlock {
+                                                println!("❌ WS Read Error: {}", e);
+                                            }
                                             break; 
                                         },
                                         Ok(_) => {} // Continue parsing
@@ -264,12 +266,34 @@ pub fn run() -> Result<()> {
                         }
                         
                         // STANDARD HTTP HANDLERS (Fallback)
+                        let path = request.lines().next().unwrap_or("").split_whitespace().nth(1).unwrap_or("/");
+                        
                         // CORS Preflight
                         if request.starts_with("OPTIONS") {
                             let headers = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
                             let _ = stream.write(headers.as_bytes());
-                        } else if request.contains("GET / ") || request.contains("GET /index.html ") {
-                            // Serve HTML Dashboard
+                        } 
+                        // SERVE ASSETS (Vite Build)
+                        else if path.starts_with("/assets/") {
+                            // Sanitize path (basic)
+                            let safe_path = path.replace("..", ""); 
+                            let file_path = format!("web{}", safe_path);
+                            
+                            if let Ok(content) = fs::read(&file_path) {
+                                let content_type = if file_path.ends_with(".css") { "text/css" }
+                                                  else if file_path.ends_with(".js") { "application/javascript" }
+                                                  else if file_path.ends_with(".svg") { "image/svg+xml" }
+                                                  else { "application/octet-stream" };
+                                                  
+                                let headers = format!("HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n", content_type, content.len());
+                                let _ = stream.write(headers.as_bytes());
+                                let _ = stream.write(&content);
+                            } else {
+                                let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+                            }
+                        }
+                        // SERVE DASHBOARD
+                        else if path == "/" || path == "/index.html" {
                             match fs::read_to_string("web/index.html") {
                                 Ok(html) => {
                                     let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", html.len(), html);
@@ -279,42 +303,19 @@ pub fn run() -> Result<()> {
                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\nDashboard file missing (web/index.html)".as_bytes());
                                 }
                             }
-                        } else if request.contains("GET /style.css") {
-                                if let Ok(content) = fs::read_to_string("web/style.css") {
-                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n";
-                                    let response = format!("{}{}", headers, content);
-                                    let _ = stream.write(response.as_bytes());
-                                } else {
-                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
-                                }
-                            } else if request.contains("GET /three.min.js") {
-                                if let Ok(content) = fs::read_to_string("web/three.min.js") {
-                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/javascript\r\n\r\n";
-                                    let response = format!("{}{}", headers, content);
-                                    let _ = stream.write(response.as_bytes());
-                                } else {
-                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
-                                }
-                            } else if request.contains("GET /index.js") { // Just in case, though it's inline in HTML
-                                if let Ok(content) = fs::read_to_string("web/index.js") {
-                                    let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/javascript\r\n\r\n";
-                                    let response = format!("{}{}", headers, content);
-                                    let _ = stream.write(response.as_bytes());
-                                } else {
-                                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
-                                }
-                            } else if request.contains("GET /telemetry") {
-                            // Serve JSON State (HTTP Fallback)
-                            let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
+                        }
+                        // API ENDPOINTS
+                        else if path == "/telemetry" {
+                            let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
                             let json = {
                                 let state = state_ref.lock().unwrap();
                                 serde_json::to_string(&*state).unwrap_or("{}".to_string())
                             };
                             let response = format!("{}{}", headers, json);
                             let _ = stream.write(response.as_bytes());
-                            
-                        } else if request.contains("POST /stimulus") {
-                            if let Some(body_start) = request.find("\r\n\r\n") {
+                        }
+                        else if path == "/stimulus" && request.starts_with("POST") {
+                             if let Some(body_start) = request.find("\r\n\r\n") {
                                 let body = &request[body_start+4..];
                                 if let Some(text_start) = body.find("\"text\":\"") {
                                     let rest = &body[text_start+8..];
@@ -324,17 +325,19 @@ pub fn run() -> Result<()> {
                                     }
                                 }
                             }
-                            let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST\r\nAccess-Control-Allow-Headers: Content-Type\r\n\r\n";
+                            let headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
                             let _ = stream.write(headers.as_bytes());
-                        } else if request.contains("POST /sleep") {
+                        }
+                        // COMMAND SHORTCUTS
+                        else if path == "/sleep" && request.starts_with("POST") {
                              let _ = tx_stimulus.send("SYS:SLEEP".to_string());
-                             let headers = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-                             let _ = stream.write(headers.as_bytes());
-                        } else if request.contains("POST /poke") {
+                             let _ = stream.write("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n\r\n".as_bytes());
+                        } 
+                        else if path == "/poke" && request.starts_with("POST") {
                              let _ = tx_stimulus.send("SYS:POKE".to_string());
-                             let headers = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
-                             let _ = stream.write(headers.as_bytes());
-                        } else {
+                             let _ = stream.write("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\n\r\n".as_bytes());
+                        } 
+                        else {
                              let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
                         }
                     }
@@ -370,6 +373,7 @@ pub fn run() -> Result<()> {
                     "loop_frequency": (state.loop_frequency * 10.0).round() / 10.0,
                     "reservoir_activity": sparse_reservoir, 
                     "current_state": state.current_state,
+                    "thoughts": state.thoughts,
                     "trauma_state": state.trauma_state,
                     "hebbian_events": state.hebbian_events,
                     "reservoir_size": state.reservoir_size
@@ -555,7 +559,8 @@ pub fn run() -> Result<()> {
                 state.entropy = current_entropy;
                 state.trauma_state = format!("{}", trauma_detector.state);
                 state.hebbian_events = ego.drain_hebbian_events();
-                // Current Stream State (Last thought)
+                // Current Stream State (Full history for UI)
+                state.thoughts = telemetry_history.iter().cloned().collect();
                 if let Some(last) = telemetry_history.back() {
                      state.current_state = last.clone();
                 }

@@ -120,7 +120,10 @@ impl Planet {
                         
                         // Capture resonance from text_response if it's not empty?
                         // Wait, think_stream returns (echo, text). Text IS the resonant word now.
-                        let synthesized = if text_response.is_empty() || text_response.starts_with("...") {
+                        let synthesized = if text_response.is_empty() 
+                            || text_response.starts_with("...") 
+                            || text_response.trim().len() < 2 
+                            || !text_response.chars().any(|c| c.is_alphabetic()) {
                             None 
                         } else {
                             Some(text_response.clone())
@@ -247,29 +250,8 @@ impl Planet {
         };
 
         // VOICE GATING LOGIC
-        // If we found a resonant word, that's a candidate for speech.
-        // But we also want to allow full sentences if the system is "excited" (High Dopamine).
-        
-        let text_out = if chem.dopamine > 0.6 {
-             // HIGH EXCITEMENT: Allow the LLM to speak a bit (maybe one word/sentence?)
-             // Actually, `perceive` only returns the *last token's* resonance.
-             // If we want FULL speech, we need to call `generate`.
-             // But `generate` is slow.
-             
-             // Compromise: If highly excited, we treat the `resonant_word` as a "Shout".
-             if let Some(ref w) = resonant_word {
-                 w.clone()
-             } else {
-                 String::new()
-             }
-        } else {
-             // LOW ENERGY: Only speak if the word is VERY resonant (defined by perceive returning Some)
-             if let Some(ref w) = resonant_word {
-                 w.clone() 
-             } else {
-                 String::new() 
-             }
-        };
+        // Speak only when resonance is found — the word itself is the signal.
+        let text_out = resonant_word.unwrap_or_default();
 
         (neural_echo, text_out)
     }
@@ -333,23 +315,26 @@ impl Planet {
         // MANIC OVERRIDE: If High Dopamine (> 0.6) and NO resonance, force a word.
         if resonance.is_none() && chem.dopamine > 0.6 {
              // Force generate a short burst (1-5 tokens)
+             // We need to ensure we sample a REAL token, not whitespace.
              let mut burst = String::new();
+             
+             // Attempt up to 3 times to find a non-empty token
              for _ in 0..3 {
                  if let Ok(token) = self.logits_processor.sample(&logits) {
                      if let Ok(fragment) = self.tokenizer.decode(&[token], true) {
-                         burst.push_str(&fragment);
+                         if !fragment.trim().is_empty() {
+                             burst.push_str(&fragment);
+                             // If we got a valid token, maybe just stop to be concise/glitchy
+                             break;
+                         }
                      }
-                     // Simplistic: Re-forward for next token? No, too slow for perceive.
-                     // access to self.model here allows forward? Yes.
-                     // But let's just pick ONE token for now to be safe and fast.
-                     break; 
                  }
              }
-             if !burst.trim().is_empty() {
+             
+             if !burst.trim().is_empty() && burst.chars().any(|c| c.is_alphabetic()) {
                  resonance = Some(burst.trim().to_string());
              } else {
-                 // Absolute fallback
-                 resonance = Some("!".to_string());
+                 resonance = None; // Silence is honest
              }
         }
         

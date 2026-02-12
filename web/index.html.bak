@@ -588,12 +588,9 @@
         document.getElementById('chem-state').textContent = d.trauma_state || 'STABLE';
         document.getElementById('chem-state').style.color = traumaActive ? 'var(--accent-red)' : 'var(--accent-green)';
 
-        // Stream — diff against last seen thoughts array
-        if (d.thoughts && d.thoughts.length > 0) {
-          // Only add entries we haven't seen yet
-          const newEntries = d.thoughts.slice(lastSeenCount);
-          newEntries.forEach(t => addStreamEntry(t));
-          lastSeenCount = d.thoughts.length;
+        // Stream
+        if (d.current_state && d.current_state.length > 0) {
+          addStreamEntry(d.current_state);
         }
 
         // Reservoir visualization
@@ -666,10 +663,9 @@
       // ===== CONSCIOUSNESS STREAM =====
       let streamCount = 0;
       let lastStreamText = '';
-      let lastSeenCount = 0;
 
       function addStreamEntry(text) {
-        if (text === lastStreamText) return; // Deduplicate repeated broadcasts
+        // if (text === lastStreamText) return; // Allow loops
         lastStreamText = text;
 
         const stream = document.getElementById('stream');

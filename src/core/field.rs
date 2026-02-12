@@ -147,8 +147,8 @@ impl SemanticField {
              let token = self.tokenizer.decode(&[top_id], true)
                  .map_err(|e| anyhow::anyhow!(e))?;
              
-             // Filter common stopwords or garbage?
-             if token.len() > 2 {
+             // Filter: must contain at least one alphabetic char (no garbage like ```, ---, >>>)
+             if token.trim().len() > 2 && token.chars().any(|c| c.is_alphabetic()) {
                  return Ok(Some(token));
              }
         }
