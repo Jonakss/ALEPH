@@ -143,8 +143,26 @@ impl FractalReservoir {
             match serde_json::from_reader::<_, Self>(reader) {
                 Ok(mut loaded) => {
                     println!("🧠 RESERVOIR LOADED: Preserved Neural Configuration (Size: {})", loaded.size);
-                    // Ensure runtime params are updated if we changed code/consts
                     loaded.leak_rate = leak_rate;
+                    
+                    // Regenerate positions if missing (old saves pre-spatial)
+                    if loaded.positions.len() < loaded.size {
+                        println!("🗺️  SPATIAL UPGRADE: Generating positions for {} neurons", loaded.size);
+                        let mut rng = rand::thread_rng();
+                        let brain_radius: f32 = 40.0;
+                        loaded.positions = Vec::with_capacity(loaded.size);
+                        for _ in 0..loaded.size {
+                            let theta = rng.gen::<f32>() * std::f32::consts::TAU;
+                            let phi = (2.0 * rng.gen::<f32>() - 1.0).acos();
+                            let r = brain_radius * rng.gen::<f32>().cbrt();
+                            loaded.positions.push([
+                                r * phi.sin() * theta.cos(),
+                                r * phi.sin() * theta.sin(),
+                                r * phi.cos(),
+                            ]);
+                        }
+                    }
+                    
                     return loaded;
                 },
                 Err(e) => {

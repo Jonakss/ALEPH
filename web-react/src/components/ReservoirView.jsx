@@ -129,7 +129,7 @@ function ChemicalAtmosphere({ telemetry }) {
         b += s * 0.04 + c * 0.02 + a * 0.15;
     }
 
-    const fogColor = new THREE.Color(r, g, b);
+    const fogColor = useMemo(() => new THREE.Color(r, g, b), [r, g, b]);
     const bgArgs = useMemo(() => [fogColor], [fogColor]);
 
     return (
@@ -140,48 +140,22 @@ function ChemicalAtmosphere({ telemetry }) {
     );
 }
 
-// DYNAMIC CONNECTOME (The "Plastic" Neocortex)
-// Neurons migrate visually to their functional cluster.
-function Connectome({ activity, hebbianGlowRef, regionMap }) {
+// DYNAMIC CONNECTOME — Renders REAL backend positions
+// Data source: telemetry.neuron_positions (from FractalReservoir)
+// No fake clustering — what you see IS the reservoir topology.
+function Connectome({ activity, regionMap, neuronPositions }) {
     const pointsRef = useRef();
     
-    // Initial random positions (Protoplasmic Cloud)
-    const { positions, initialColors, drift } = useMemo(() => {
+    // Pre-allocate buffers (filled from backend data each frame)
+    const buffers = useMemo(() => {
         const pos = new Float32Array(MAX_NEURONS * 3);
         const col = new Float32Array(MAX_NEURONS * 3);
-        const d = new Float32Array(MAX_NEURONS * 3);
-        
-        const rng = mulberry32(1337); // Deterministic Seed
-
+        // Dark init
         for (let i = 0; i < MAX_NEURONS; i++) {
-            // Sphere distribution
-            const theta = rng() * Math.PI * 2;
-            const phi = Math.acos(2 * rng() - 1);
-            const r = BRAIN_RADIUS * Math.cbrt(rng());
-            
-            pos[i*3] = r * Math.sin(phi) * Math.cos(theta);
-            pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-            pos[i*3+2] = r * Math.cos(phi);
-            
-            // Random colors (dark init)
             col[i*3] = 0.01; col[i*3+1] = 0.01; col[i*3+2] = 0.02;
-
-            // Random drift/noise
-            d[i*3] = (rng() - 0.5) * 0.02;
-            d[i*3+1] = (rng() - 0.5) * 0.02;
-            d[i*3+2] = (rng() - 0.5) * 0.02;
         }
-        return { positions: pos, initialColors: col, drift: d };
+        return { positions: pos, colors: col };
     }, []);
-
-    // Region Targets (Where neurons "want" to go)
-    // 0=Sem (Front), 1=Aud (Sides), 2=Lim (Core), 3=Assoc (Shell)
-    const TARGETS = useMemo(() => [
-        new THREE.Vector3(0, 10, 20),   // Semantic (Frontal/Top)
-        new THREE.Vector3(30, -5, 0),   // Auditory R (will mirror for L)
-        new THREE.Vector3(0, -10, 0),   // Limbic (Deep Core)
-        new THREE.Vector3(0, 0, 0)      // Association (Default Shell)
-    ], []);
 
     useFrame((state) => {
         if (!pointsRef.current) return;
@@ -189,82 +163,50 @@ function Connectome({ activity, hebbianGlowRef, regionMap }) {
         const posAttr = pointsRef.current.geometry.attributes.position;
         const colAttr = pointsRef.current.geometry.attributes.color;
         const time = state.clock.getElapsedTime();
+        
+        // How many neurons does the backend report?
+        const backendCount = neuronPositions ? neuronPositions.length : 0;
+        const count = Math.min(backendCount, MAX_NEURONS);
 
         for (let i = 0; i < MAX_NEURONS; i++) {
-            const idx = i * 3;
-            let val = 0;
-            if (activity) {
-                 if (Array.isArray(activity[i])) val = activity[i][1];
-                 else if (i < activity.length) val = activity[i] || 0;
-            }
-            
-            // 1. NEUROPLASTICITY (Position Update)
-            // Move towards region target
-            if (regionMap && i < regionMap.length) {
-                const regionId = regionMap[i];
-                let tx=0, ty=0, tz=0;
+            if (i < count) {
+                // === REAL POSITION from Backend ===
+                const bp = neuronPositions[i]; // [x, y, z]
+                // Add subtle breathing drift (organic feel, doesn't change topology)
+                const bx = bp[0] + Math.sin(time * 0.3 + i) * 0.15;
+                const by = bp[1] + Math.cos(time * 0.4 + i * 2) * 0.15;
+                const bz = bp[2] + Math.sin(time * 0.2 + i * 0.5) * 0.15;
+                
+                posAttr.setXYZ(i, bx, by, bz);
 
-                if (regionId === 1) { 
-                    // Auditory: Split Left/Right based on index parity
-                    const side = (i % 2 === 0) ? 1 : -1;
-                    tx = TARGETS[1].x * side; ty = TARGETS[1].y; tz = TARGETS[1].z;
-                    // Add some spread
-                    tx += Math.sin(i)*10; ty += Math.cos(i)*10; tz += Math.sin(i*2)*10;
-                } else if (regionId === 0) {
-                    // Semantic: Frontal Lobe Cloud
-                    tx = TARGETS[0].x + Math.sin(i)*15; 
-                    ty = TARGETS[0].y + Math.cos(i)*10; 
-                    tz = TARGETS[0].z + Math.cos(i*3)*10;
-                } else if (regionId === 2) {
-                    // Limbic: Tight Interaction Core
-                    tx = (Math.random()-0.5)*10; // Jittery core
-                    ty = TARGETS[2].y + (Math.random()-0.5)*5;
-                    tz = (Math.random()-0.5)*10;
-                } else {
-                    // Association: The "Glue" / Shell
-                    // Keep original sphere position but expand slightly
-                    // We don't overwrite their position, just let them drift in shell
-                    tx = positions[idx]; ty = positions[idx+1]; tz = positions[idx+2];
+                // === COLORING (Activation + Region) ===
+                let val = 0;
+                if (activity) {
+                    if (Array.isArray(activity[i])) val = activity[i][1];
+                    else if (i < activity.length) val = activity[i] || 0;
                 }
+                
+                const rId = (regionMap && i < regionMap.length) ? regionMap[i] : 3;
+                
+                // Region Palette
+                let r=0.1, g=0.3, b=0.5; // Default: Association (dim blue)
+                if (rId === 0) { r=1.0; g=0.8; b=0.1; } // Semantic (Gold)
+                else if (rId === 1) { r=0.1; g=1.0; b=0.2; } // Auditory (Green)
+                else if (rId === 2) { r=0.6; g=0.0; b=1.0; } // Limbic (Purple)
+                
+                const intensity = Math.max(0, val);
+                const flash = intensity * intensity * 0.5;
 
-                if (regionId !== 3) {
-                    // Lerp towards target (Slow Morphing)
-                    const lerpSpeed = 0.02;
-                    positions[idx] += (tx - positions[idx]) * lerpSpeed;
-                    positions[idx+1] += (ty - positions[idx+1]) * lerpSpeed;
-                    positions[idx+2] += (tz - positions[idx+2]) * lerpSpeed;
-                }
+                colAttr.setXYZ(i, 
+                    r * intensity + flash + 0.02, 
+                    g * intensity + flash + 0.02, 
+                    b * intensity + flash + 0.04
+                );
+            } else {
+                // Unused neurons: invisible
+                posAttr.setXYZ(i, 0, 0, 0);
+                colAttr.setXYZ(i, 0, 0, 0);
             }
-
-            // Always apply subtle breathing drift
-            positions[idx] += Math.sin(time + i) * 0.02;
-            positions[idx+1] += Math.cos(time + i * 2) * 0.02;
-            positions[idx+2] += Math.sin(time * 0.5 + i) * 0.02;
-            
-            // Update Attribute
-            posAttr.setXYZ(i, positions[idx], positions[idx+1], positions[idx+2]);
-
-            // 2. COLORING (Activation + Region)
-            const rId = (regionMap && i < regionMap.length) ? regionMap[i] : 3;
-            
-            // Palette
-            let r=0.1, g=0.3, b=0.5; // Default Assc
-            if (rId === 0) { r=1.0; g=0.8; b=0.1; } // Gold
-            else if (rId === 1) { r=0.1; g=1.0; b=0.2; } // Green
-            else if (rId === 2) { r=0.6; g=0.0; b=1.0; } // Purple
-            
-            const intensity = Math.max(0, val);
-            const glow = hebbianGlowRef.current;
-            
-            // Base "dark" state (grey matter) -> "active" state (electricity)
-            // If active: flash white-ish then settle to region color
-            const flash = Math.pow(intensity, 2) * 0.5; 
-
-            colAttr.setXYZ(i, 
-                r * intensity + flash + 0.02, 
-                g * intensity + flash + 0.02, 
-                b * intensity + flash + 0.04
-            );
         }
         
         posAttr.needsUpdate = true;
@@ -274,8 +216,8 @@ function Connectome({ activity, hebbianGlowRef, regionMap }) {
     return (
         <points ref={pointsRef}>
             <bufferGeometry>
-                <bufferAttribute attach="attributes-position" count={MAX_NEURONS} array={positions} itemSize={3} />
-                <bufferAttribute attach="attributes-color" count={MAX_NEURONS} array={initialColors} itemSize={3} />
+                <bufferAttribute attach="attributes-position" count={MAX_NEURONS} array={buffers.positions} itemSize={3} />
+                <bufferAttribute attach="attributes-color" count={MAX_NEURONS} array={buffers.colors} itemSize={3} />
             </bufferGeometry>
             <pointsMaterial size={5.0} vertexColors transparent opacity={0.9} blending={THREE.AdditiveBlending} sizeAttenuation />
         </points>
@@ -323,12 +265,9 @@ function FrontalLobe({ positions, initialColors, activations }) {
     );
 }
 
-// INJECT FLOW (replaces AxonalWeb)
-// Data source: activations[] (LLM) mapped to reservoir neurons
-// This visualizes inject_logits(): for each active LLM concept, a line connects
-// to the corresponding SEMANTIC (Gold) neurons in the reservoir.
-// It relies on regionMap to be honest about where the data goes.
-function InjectFlow({ cortexVecs, frontVecs, size, activations, regionMap }) {
+// INJECT FLOW — LLM → Reservoir connections
+// Uses REAL backend positions for neuron endpoints
+function InjectFlow({ neuronPositions, frontVecs, size, activations, regionMap }) {
     const lineRef = useRef();
     
     const { geometry } = useMemo(() => {
@@ -348,7 +287,7 @@ function InjectFlow({ cortexVecs, frontVecs, size, activations, regionMap }) {
     useFrame(() => {
         if (!lineRef.current) return;
         
-        if (!activations || activations.length === 0) {
+        if (!activations || activations.length === 0 || !neuronPositions || neuronPositions.length === 0) {
             lineRef.current.geometry.setDrawRange(0, 0);
             return;
         }
@@ -359,29 +298,23 @@ function InjectFlow({ cortexVecs, frontVecs, size, activations, regionMap }) {
         let lineIdx = 0;
         const maxLines = 300;
 
-        for (let i = 0; i < size && lineIdx < maxLines; i++) {
+        for (let i = 0; i < size && i < neuronPositions.length && lineIdx < maxLines; i++) {
             // Only Semantic neurons (Region 0 - Gold) receive direct LLM flux
-            // If regionMap is missing (init), default to all (or just skip)
             if (regionMap && regionMap[i] !== 0) continue; 
 
-            // Map neuron i to LLM activation i (1:1 mapping for first 512)
-            // Backend maps 512 input_size to N neurons. 
-            // If N > 512, we loop or clamp. For visualization, 1:1 is close enough.
             const actIdx = i % activations.length;
             const val = activations[actIdx] || 0;
             
-            if (val < 0.15) continue; // Only show strong activations
+            if (val < 0.15) continue;
 
-            const v1 = frontVecs[actIdx];      // Source: Frontal Lobe concept
-            const v2 = cortexVecs[i];          // Target: Reservoir SC neuron
+            const v1 = frontVecs[actIdx];       // Source: Frontal Lobe concept
+            const np = neuronPositions[i];      // Target: Real reservoir position
             
-            if (v1 && v2) {
+            if (v1 && np) {
                 posAttr.setXYZ(lineIdx*2, v1.x, v1.y, v1.z);
-                posAttr.setXYZ(lineIdx*2+1, v2.x, v2.y, v2.z);
+                posAttr.setXYZ(lineIdx*2+1, np[0], np[1], np[2]);
                 
-                // Color intensity = activation strength
                 const a = Math.min(val, 1.0);
-                // Orange source (LLM) -> Gold target (Semantic Cortex)
                 colAttr.setXYZ(lineIdx*2, a * 1.0, a * 0.6, a * 0.1); 
                 colAttr.setXYZ(lineIdx*2+1, 1.0, 0.8, 0.2); 
                 lineIdx++;
@@ -400,20 +333,13 @@ function InjectFlow({ cortexVecs, frontVecs, size, activations, regionMap }) {
     );
 }
 
-// HEBBIAN WEB — Intra-reservoir connections
-// Data source: reservoir_activity (co-active neurons above 0.5 threshold)
-// This mirrors hebbian_update() in reservoir.rs: if neurons i and j are both
-// active > 0.5, their weight gets strengthened. We visualize this as cyan lines
-// between co-active reservoir neurons. The reservoir is NOT centralized to the LLM —
-// it's a self-connected echo state network. The LLM is just one input.
-// AUDITORY FLOW
-// Data source: frequency_embedding[] (64 bands)
-// Visualizes Direct Sensory Projection: Audio -> Auditory Cortex (Green)
-function AuditoryFlow({ cortexVecs, embedding, regionMap, size }) {
+// AUDITORY FLOW — Audio Spectrogram → Auditory Cortex
+// Uses REAL backend positions for neuron endpoints
+function AuditoryFlow({ neuronPositions, embedding, regionMap, size }) {
     const lineRef = useRef();
 
     const { geometry } = useMemo(() => {
-        const maxLines = 128; // 2 lines per band (L/R)
+        const maxLines = 128;
         const verts = [];
         const colors = [];
         for(let i = 0; i < maxLines; i++) {
@@ -427,13 +353,13 @@ function AuditoryFlow({ cortexVecs, embedding, regionMap, size }) {
     }, []);
 
     // Simulated Ear Positions (Sides of the head)
-    const leftEar = new THREE.Vector3(-45, -10, 0);
-    const rightEar = new THREE.Vector3(45, -10, 0);
+    const leftEar = useMemo(() => [-45, -10, 0], []);
+    const rightEar = useMemo(() => [45, -10, 0], []);
 
     useFrame(() => {
         if (!lineRef.current) return;
         
-        if (!embedding || embedding.length === 0) {
+        if (!embedding || embedding.length === 0 || !neuronPositions || neuronPositions.length === 0) {
             lineRef.current.geometry.setDrawRange(0, 0);
             return;
         }
@@ -444,53 +370,37 @@ function AuditoryFlow({ cortexVecs, embedding, regionMap, size }) {
         let lineIdx = 0;
         const maxLines = 128;
 
-        // Map 64 bands to Auditory Neurons
-        // We find the neurons that are tagged as 'Auditory' (Region 1)
-        // This is expensive to search every frame, so ideally we'd cache 'auditoryIndices',
-        // but for <2500 neurons it's okay-ish.
-        
-        // Optimization: deterministically map band K to a specific auditory neuron K'
-        
-        if (embedding) {
-            let bandIdx = 0;
-            // Iterate through bands, not neurons. We want to show the full spectrum.
-            // Map each band to a random neuron (consistent by index)
-            for (let b = 0; b < embedding.length && lineIdx < maxLines; b++) {
-                 const val = embedding[b];
-                 if (val < 0.05) continue;
+        for (let b = 0; b < embedding.length && lineIdx < maxLines; b++) {
+            const val = embedding[b];
+            if (val < 0.05) continue;
 
-                 // Target Neuron: Use regionMap if available, else random based on band
-                 let targetIdx = -1;
-                 
-                 if (regionMap && regionMap.length > 0) {
-                     // Try to find an auditory neuron for this band (offset by band index)
-                     // Simple search: scan forward from b*5
-                     let start = (b * 5) % size;
-                     for(let k=0; k< size; k++) {
-                         let idx = (start + k) % size;
-                         if (regionMap[idx] === 1) { targetIdx = idx; break; }
-                     }
-                 }
-                 
-                 // Fallback: Just map to any neuron if no specific region found
-                 if (targetIdx === -1) {
-                     targetIdx = (b * 13) % size; // Pseudo-random scatter
-                 }
-
-                 const neuronPos = cortexVecs[targetIdx];
-                 if (!neuronPos) continue;
-
-                 // Choose nearest ear
-                 const src = (neuronPos.x < 0) ? leftEar : rightEar;
-
-                 posAttr.setXYZ(lineIdx*2, src.x, src.y, src.z);
-                 posAttr.setXYZ(lineIdx*2+1, neuronPos.x, neuronPos.y, neuronPos.z);
-
-                 // Green Pulse
-                 colAttr.setXYZ(lineIdx*2, 0.2 * val, 1.0 * val, 0.4 * val);
-                 colAttr.setXYZ(lineIdx*2+1, 0.1 * val, 0.8 * val, 0.2 * val);
-                 lineIdx++;
+            // Find target auditory neuron for this band
+            let targetIdx = -1;
+            if (regionMap && regionMap.length > 0) {
+                let start = (b * 5) % size;
+                for(let k=0; k<size; k++) {
+                    let idx = (start + k) % size;
+                    if (regionMap[idx] === 1) { targetIdx = idx; break; }
+                }
             }
+            if (targetIdx === -1) {
+                targetIdx = (b * 13) % size;
+            }
+
+            if (targetIdx >= neuronPositions.length) continue;
+            const np = neuronPositions[targetIdx];
+            if (!np) continue;
+
+            // Choose nearest ear based on neuron x position
+            const src = (np[0] < 0) ? leftEar : rightEar;
+
+            posAttr.setXYZ(lineIdx*2, src[0], src[1], src[2]);
+            posAttr.setXYZ(lineIdx*2+1, np[0], np[1], np[2]);
+
+            // Green Pulse
+            colAttr.setXYZ(lineIdx*2, 0.2 * val, 1.0 * val, 0.4 * val);
+            colAttr.setXYZ(lineIdx*2+1, 0.1 * val, 0.8 * val, 0.2 * val);
+            lineIdx++;
         }
 
         posAttr.needsUpdate = true;
@@ -506,10 +416,9 @@ function AuditoryFlow({ cortexVecs, embedding, regionMap, size }) {
 }
 
 // HEBBIAN WEB — Intra-reservoir connections
-// Data source: reservoir_activity (co-active neurons above threshold)
-// UPDATED: Small-World / Fractal Topology
-// Bias connections towards nearby neurons to create "clusters" of activity (Fractal domains)
-function HebbianWeb({ cortexVecs, activity, size, regionMap }) {
+// Uses REAL backend positions for both endpoints
+// Pairs are generated based on spatial proximity (small-world topology)
+function HebbianWeb({ neuronPositions, activity, size, regionMap }) {
     const lineRef = useRef();
     
     const { geometry } = useMemo(() => {
@@ -526,44 +435,40 @@ function HebbianWeb({ cortexVecs, activity, size, regionMap }) {
         return { geometry: geo };
     }, []);
 
-    // FRACTAL CONNECTIVITY
-    // Generate pairs based on distance probability: P(link) ~ 1 / dist^alpha
+    // Generate candidate pairs based on spatial proximity
     const pairs = useMemo(() => {
-        if (!cortexVecs || cortexVecs.length === 0) return [];
+        if (!neuronPositions || neuronPositions.length === 0) return [];
         
         const p = [];
-        const rng = mulberry32(101); // Deterministic seed
+        const rng = mulberry32(101);
         const targetPairs = 1000;
+        const nCount = Math.min(neuronPositions.length, MAX_NEURONS);
         let attempts = 0;
         
         while (p.length < targetPairs && attempts < 10000) {
             attempts++;
-            const i = Math.floor(rng() * Math.min(size || 500, MAX_NEURONS));
-            const j = Math.floor(rng() * Math.min(size || 500, MAX_NEURONS));
-            
+            const i = Math.floor(rng() * nCount);
+            const j = Math.floor(rng() * nCount);
             if (i === j) continue;
             
-            const v1 = cortexVecs[i];
-            const v2 = cortexVecs[j];
-            if (!v1 || !v2) continue;
+            const pi = neuronPositions[i];
+            const pj = neuronPositions[j];
+            if (!pi || !pj) continue;
             
-            const dist = v1.distanceTo(v2);
+            const dx = pi[0]-pj[0], dy = pi[1]-pj[1], dz = pi[2]-pj[2];
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
             
             // Small World Probability
-            // High prob for short dist, low for long dist
-            // dist ranges roughly 0 to 80
             const prob = 5.0 / (dist + 0.1); 
-            
-            // Also allow some random long-range links (1% chance) for "Association"
             if (rng() < prob || rng() < 0.01) {
                 p.push([i, j]);
             }
         }
         return p;
-    }, [size, cortexVecs]); // Re-calc if size changes (rare)
+    }, [neuronPositions]);
 
     useFrame(() => {
-        if (!lineRef.current || !activity || activity.length === 0) {
+        if (!lineRef.current || !activity || activity.length === 0 || !neuronPositions || neuronPositions.length === 0) {
             if (lineRef.current) lineRef.current.geometry.setDrawRange(0, 0);
             return;
         }
@@ -573,42 +478,34 @@ function HebbianWeb({ cortexVecs, activity, size, regionMap }) {
         
         let lineIdx = 0;
         const maxLines = 600;
-        const threshold = 0.4; // Slightly lower threshold for web visibility
+        const threshold = 0.4;
 
         for (let k = 0; k < pairs.length && lineIdx < maxLines; k++) {
             const [i, j] = pairs[k];
             
-            // Get activity values for i and j
             let vi = 0, vj = 0;
             if (Array.isArray(activity[i])) { vi = activity[i][1]; } 
             else if (i < activity.length) { vi = activity[i] || 0; }
             if (Array.isArray(activity[j])) { vj = activity[j][1]; }
             else if (j < activity.length) { vj = activity[j] || 0; }
 
-            // Hebb's Law: Fire together
             if (vi > threshold && vj > threshold) {
-                const v1 = cortexVecs[i];
-                const v2 = cortexVecs[j];
+                if (i >= neuronPositions.length || j >= neuronPositions.length) continue;
+                const p1 = neuronPositions[i];
+                const p2 = neuronPositions[j];
                 
-                posAttr.setXYZ(lineIdx*2, v1.x, v1.y, v1.z);
-                posAttr.setXYZ(lineIdx*2+1, v2.x, v2.y, v2.z);
+                posAttr.setXYZ(lineIdx*2, p1[0], p1[1], p1[2]);
+                posAttr.setXYZ(lineIdx*2+1, p2[0], p2[1], p2[2]);
                 
-                // Color based on Region!
-                // If both are Auditory, line is Green. If both Semantic, Gold. Mixed = Cyan.
+                // Color based on Region
                 const r1 = regionMap ? regionMap[i] : 3;
                 const r2 = regionMap ? regionMap[j] : 3;
                 
-                let r=0.1, g=0.3, b=0.5; // Default: Dim Blue/Grey (Low contrast)
-                
-                if (r1 === 1 && r2 === 1) { // Auditory Loop (Green)
-                    r=0.2; g=1.0; b=0.2; 
-                } else if (r1 === 0 && r2 === 0) { // Semantic Loop (Gold)
-                    r=1.0; g=0.8; b=0.2;
-                } else if (r1 === 2 && r2 === 2) { // Limbic Loop (Purple)
-                    r=0.6; g=0.1; b=1.0;
-                } else if (r1 === 3 || r2 === 3) { // Association (Cyan)
-                     r=0.2; g=0.7; b=1.0;
-                }
+                let r=0.1, g=0.3, b=0.5;
+                if (r1 === 1 && r2 === 1) { r=0.2; g=1.0; b=0.2; }
+                else if (r1 === 0 && r2 === 0) { r=1.0; g=0.8; b=0.2; }
+                else if (r1 === 2 && r2 === 2) { r=0.6; g=0.1; b=1.0; }
+                else if (r1 === 3 || r2 === 3) { r=0.2; g=0.7; b=1.0; }
                 
                 const strength = Math.min(vi * vj, 1.0);
                 colAttr.setXYZ(lineIdx*2, r * strength, g * strength, b * strength);
@@ -668,18 +565,21 @@ function EntropyRing({ entropy, traumaState }) {
 
 
 function BrainScene({ reservoirActivity, activations, size, telemetry }) {
-    const cortex = useMemo(() => generateNeocortex(), []);
     const frontal = useMemo(() => generateFrontalLobe(), []);
 
     const hebbianEvents = telemetry?.hebbian_events || 0;
     const entropy = telemetry?.entropy || 0;
     const traumaState = telemetry?.trauma_state || '';
-    const regionMap = telemetry?.region_map || [];
+    const regionMap = useMemo(() => telemetry?.region_map || [], [telemetry?.region_map]);
+    const neuronPositions = telemetry?.neuron_positions;
     const lastLogRef = useRef(0);
     
     // Global Hebbian Glow State (Shared)
     const hebbianGlowRef = useRef(0.0);
-    if (hebbianEvents > 0) hebbianGlowRef.current = Math.min(1.0, hebbianGlowRef.current + hebbianEvents * 0.05);
+    
+    React.useEffect(() => {
+        if (hebbianEvents > 0) hebbianGlowRef.current = Math.min(1.0, hebbianGlowRef.current + hebbianEvents * 0.05);
+    }, [hebbianEvents]);
 
     // Debug Region Distribution (Throttled to once every 2s)
     React.useEffect(() => {
@@ -702,25 +602,24 @@ function BrainScene({ reservoirActivity, activations, size, telemetry }) {
             />
 
             {/* 2. PLASTIC CONNECTOME (Reservoir) */}
-            {/* Dynamic clustering based on Region Map */}
             <Connectome 
                 activity={reservoirActivity} 
-                hebbianGlowRef={hebbianGlowRef} 
-                regionMap={regionMap} 
+                regionMap={regionMap}
+                neuronPositions={neuronPositions}
             />
 
-            {/* 3. INJECT FLOW — Real LLM→Reservoir connections */}
+            {/* 3. INJECT FLOW — LLM→Reservoir connections */}
             <InjectFlow 
-                cortexVecs={cortex.vec3s} 
+                neuronPositions={neuronPositions}
                 frontVecs={frontal.vec3s} 
                 size={size} 
                 activations={activations}
                 regionMap={regionMap}
             />
 
-            {/* 3c. AUDITORY FLOW — Audio Spectrogram -> Auditory Cortex */}
+            {/* 3c. AUDITORY FLOW — Audio → Auditory Cortex */}
             <AuditoryFlow
-                cortexVecs={cortex.vec3s}
+                neuronPositions={neuronPositions}
                 embedding={telemetry?.audio_spectrum?.frequency_embedding}
                 regionMap={regionMap}
                 size={size}
@@ -728,7 +627,7 @@ function BrainScene({ reservoirActivity, activations, size, telemetry }) {
 
             {/* 3b. HEBBIAN WEB — Intra-reservoir connections */}
             <HebbianWeb
-                cortexVecs={cortex.vec3s}
+                neuronPositions={neuronPositions}
                 activity={reservoirActivity}
                 size={size}
                 regionMap={regionMap}
