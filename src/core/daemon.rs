@@ -6,9 +6,10 @@ use std::sync::mpsc;
 use std::collections::VecDeque;
 use crate::core::thought::{Thought, MindVoice};
 use crate::core::reservoir::FractalReservoir;
-use crate::core::planet::{Planet, CortexInput};
+use crate::cortex::planet::{Planet, CortexInput};
 use crate::core::chemistry::Neurotransmitters;
 use crate::core::hippocampus::Hippocampus;
+use crate::core::neocortex::Neocortex;
 use crate::core::genome::Genome;
 
 use crate::core::satellite::Satellite;
@@ -24,6 +25,8 @@ use std::net::TcpListener;
 use chrono::{Local, Timelike}; // Chronoreception
 use std::io::{Read, Write};
 use std::fs;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 #[derive(serde::Serialize, Clone, Default)]
 struct WebTelemetry {
@@ -41,28 +44,67 @@ struct WebTelemetry {
     hebbian_events: u32,
     reservoir_size: usize,
     entropy: f32,
+    llm_activity: Vec<f32>,
+    top_activations: Vec<(String, f32)>, 
+    
+    // System Vitals
+    system_ram_gb: f32,
+    system_cpu_load: f32,
+    
+    // Neural Visualization
+    activations: Vec<f32>,
+    region_map: Vec<u8>,
+    neuron_positions: Vec<[f32; 3]>,
+    
+    // Genome Traits
+    curiosity: f32,
+    stress_tolerance: f32,
+    generation: u32,
 }
 
-pub fn run() -> Result<()> {
+pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     println!("🌟 ALEPH STAR SYSTEM ONLINE (Daemon Mode)");
+    
+    // Proprioception (System Monitor)
+    let mut _sys = sysinfo::System::new_all();
 
     // --- CHANNELS ---
     let (tx_thoughts, rx_thoughts) = mpsc::channel::<Thought>();
     
+    // --- 1.7 SENSORY STATE (Phase 2) ---
+    // Persistent buffer for sensory inputs (Audio/Vision) that decays over time
+    let mut current_sensory_vector: Vec<f32> = vec![0.0; 500];
+    
+    // --- 2. START THE LOOP ---
+    // Track last active interaction to trigger Spontaneous Thought
+    let mut last_interaction_tick: u64 = 0; 
+    let mut ticks: u64 = 0;
     // --- 0. GENOME (The Seed) ---
-    let seed = Genome::load()?;
+    let mut seed = Genome::load()?;
     let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
         format!("🧬 GENOME LOADED: Gen {} | StressRes: {:.2}", seed.generation, seed.stress_tolerance)));
 
     // --- 1. THE STAR (Biological Ground Truth) ---
     let chemistry = Arc::new(Mutex::new(Neurotransmitters::new()));
-    // Reservoir (The Body's Neural Network)
-    // Reservoir (The Body's Neural Network) - Loads or Creates
-    let mut ego = FractalReservoir::load(500, 0.2);
+    
+    // GENESIS: Calculate Brain Size from Genome
+    // Base 500 + (Generation * 10) + (Curiosity * 50) - (Paranoia * 20)
+    // Example Gen 1, Cur 0.5: 500 + 10 + 25 = 535 neurons
+    // Example Gen 10, Cur 0.9: 500 + 100 + 45 = 645 neurons
+    let base_size = 500;
+    let genetic_bonus = (seed.generation * 10) as usize;
+    let trait_bonus = (seed.curiosity * 50.0) as usize;
+    let birth_size = base_size + genetic_bonus + trait_bonus;
+    
+    // Reservoir (The Body's Neural Network) - Loads from disk OR Creates using birth_size
+    let mut ego = FractalReservoir::load(birth_size, 0.2);
     ego.set_curiosity(seed.curiosity); // Genome -> Learning Rate
     
     // --- 1.4 LUCIFER PROTOCOL (Trauma Detection) ---
     let mut trauma_detector = TraumaDetector::new();
+    
+    // --- 1.4.1 NEOCORTEX (Structural Observer) ---
+    let mut neocortex = Neocortex::new();
     
     // --- 1.5 THE SATELLITE (Observer) ---
     let satellite = Satellite::new(seed.paranoia, seed.refractive_index); 
@@ -78,10 +120,38 @@ pub fn run() -> Result<()> {
     let (tx_audio_text, rx_audio_text) = mpsc::channel::<String>();
     let (tx_spectrum, rx_spectrum) = mpsc::channel::<AudioSpectrum>();
     
-    // Spawn Audio Listener
-    // AudioListener::new automatically starts the stream and internal threads
-    let _ears = ears::AudioListener::new(tx_thoughts.clone(), tx_audio_text, tx_spectrum)
-        .expect("Failed to spawn Ears");
+    // WebSocket Audio channel (browser mic → backend ears)
+    let (ws_audio_tx, ws_audio_rx) = mpsc::channel::<Vec<f32>>();
+    let ws_audio_tx = Arc::new(Mutex::new(ws_audio_tx));
+    let ws_audio_tx_server = ws_audio_tx.clone();
+    
+    // Detect Sensory Mode
+    let sensory_mode = if headless {
+        ears::SensoryMode::Headless
+    } else if let Some(ref path) = listen_path {
+        ears::SensoryMode::File(path.clone())
+    } else {
+        // Try local mic, fallback to WebSocket if no device
+        match {
+            use cpal::traits::HostTrait;
+            cpal::default_host().default_input_device()
+        } {
+            Some(_) => ears::SensoryMode::Mic,
+            None => {
+                println!("⚠️ No microphone detected. Falling back to WebSocket Audio Mode.");
+                ears::SensoryMode::WebSocket
+            }
+        }
+    };
+    
+    let needs_ws_audio = matches!(sensory_mode, ears::SensoryMode::WebSocket);
+    
+    // Spawn Audio Listener with detected mode
+    let _ears = ears::AudioListener::new(
+        tx_thoughts.clone(), tx_audio_text, tx_spectrum,
+        sensory_mode, 
+        if needs_ws_audio { Some(ws_audio_rx) } else { None }
+    ).expect("Failed to spawn Ears");
     let mut last_spectrum = AudioSpectrum::default();
 
     // Graceful Shutdown Handler
@@ -126,6 +196,7 @@ pub fn run() -> Result<()> {
                 let tx_stimulus = tx_stimulus_web.clone();
                 let state_ref = web_state_server.clone();
                 let ws_list = ws_clients_server.clone();
+                let ws_audio_tx = ws_audio_tx_server.clone();
                 
                 thread::spawn(move || {
                     let mut buffer = [0; 8192];
@@ -133,6 +204,10 @@ pub fn run() -> Result<()> {
                         let request = String::from_utf8_lossy(&buffer[..n]);
                         
                         // CHECK FOR WEBSOCKET UPGRADE
+                        if request.len() > 0 {
+                             // println!("📝 Raw Request: {:?}", request.lines().next()); // Log first line only
+                        }
+                        
                         let request_lower = request.to_lowercase();
                         if request_lower.contains("upgrade: websocket") {
                             println!("🔗 Incoming WebSocket Upgrade Request...");
@@ -223,9 +298,9 @@ pub fn run() -> Result<()> {
                                         payload_len = u64::from_be_bytes(ext) as usize;
                                     }
 
-                                    // Check safety limit before allocating
-                                    if payload_len > 65536 { 
-                                        println!("⚠️ WS Payload too large, dropping connection.");
+                                    // Check safety limit before allocating (256KB for audio chunks)
+                                    if payload_len > 262144 { 
+                                        println!("⚠️ WS Payload too large ({}b), dropping connection.", payload_len);
                                         break; 
                                     }
 
@@ -257,6 +332,19 @@ pub fn run() -> Result<()> {
                                                         _ => {}
                                                     }
                                                 }
+                                            }
+                                        }
+                                    }
+                                    // Binary frame (opcode 0x2) = Browser Audio PCM
+                                    else if opcode == 0x2 {
+                                        // Decode f32 PCM samples from browser
+                                        // Browser sends Float32Array as raw bytes (4 bytes per sample, little-endian)
+                                        if payload.len() >= 4 && payload.len() % 4 == 0 {
+                                            let samples: Vec<f32> = payload.chunks_exact(4)
+                                                .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                                                .collect();
+                                            if let Ok(tx) = ws_audio_tx.lock() {
+                                                let _ = tx.send(samples);
                                             }
                                         }
                                     }
@@ -292,17 +380,10 @@ pub fn run() -> Result<()> {
                                 let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
                             }
                         }
-                        // SERVE DASHBOARD
+                        // SERVE DASHBOARD (DISABLED - Legacy)
                         else if path == "/" || path == "/index.html" {
-                            match fs::read_to_string("web/index.html") {
-                                Ok(html) => {
-                                    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", html.len(), html);
-                                    let _ = stream.write(response.as_bytes());
-                                },
-                                Err(_) => {
-                                    let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\nDashboard file missing (web/index.html)".as_bytes());
-                                }
-                            }
+                            let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nALEPH Nervous System Active. Use React Client.\r\n";
+                            let _ = stream.write(response.as_bytes());
                         }
                         // API ENDPOINTS
                         else if path == "/telemetry" {
@@ -354,7 +435,7 @@ pub fn run() -> Result<()> {
         loop {
             thread::sleep(Duration::from_millis(83)); // ~12Hz broadcast
             
-            let (json, state_summary) = {
+            let (json, _state_summary) = {
                 let state = ws_broadcast_state.lock().unwrap();
                 
                 // Sparse Updates: Filter neurons > 0.005 and round to 3 decimals
@@ -363,20 +444,35 @@ pub fn run() -> Result<()> {
                     .map(|(i, &v)| (i, (v * 1000.0).round() / 1000.0))
                     .collect();
 
+                // Sanitize Activations (Replace NaN/Inf with 0.0)
+                let clean_activations: Vec<f32> = state.activations.iter()
+                    .map(|&v| if v.is_finite() { v } else { 0.0 })
+                    .collect();
+
                 let json_obj = serde_json::json!({
-                    "dopamine": (state.dopamine * 1000.0).round() / 1000.0,
-                    "cortisol": (state.cortisol * 1000.0).round() / 1000.0,
-                    "adenosine": (state.adenosine * 1000.0).round() / 1000.0,
-                    "oxytocin": (state.oxytocin * 1000.0).round() / 1000.0,
-                    "serotonin": (state.serotonin * 1000.0).round() / 1000.0,
-                    "entropy": (state.entropy * 1000.0).round() / 1000.0,
-                    "loop_frequency": (state.loop_frequency * 10.0).round() / 10.0,
+                    "dopamine": if state.dopamine.is_finite() { (state.dopamine * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "cortisol": if state.cortisol.is_finite() { (state.cortisol * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "adenosine": if state.adenosine.is_finite() { (state.adenosine * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "oxytocin": if state.oxytocin.is_finite() { (state.oxytocin * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "serotonin": if state.serotonin.is_finite() { (state.serotonin * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "entropy": if state.entropy.is_finite() { (state.entropy * 1000.0).round() / 1000.0 } else { 0.0 },
+                    "loop_frequency": if state.loop_frequency.is_finite() { (state.loop_frequency * 10.0).round() / 10.0 } else { 0.0 },
                     "reservoir_activity": sparse_reservoir, 
                     "current_state": state.current_state,
                     "thoughts": state.thoughts,
                     "trauma_state": state.trauma_state,
                     "hebbian_events": state.hebbian_events,
-                    "reservoir_size": state.reservoir_size
+                    "reservoir_size": state.reservoir_size,
+                    "top_activations": state.top_activations,
+                    "llm_activity": state.llm_activity,
+                    "system_ram_gb": state.system_ram_gb,
+                    "system_cpu_load": state.system_cpu_load,
+                    "activations": clean_activations,
+                    "region_map": state.region_map,
+                    "neuron_positions": state.neuron_positions,
+                    "curiosity": state.curiosity,
+                    "stress_tolerance": state.stress_tolerance,
+                    "generation": state.generation
                 });
                 
                 let s = json_obj.to_string();
@@ -384,18 +480,8 @@ pub fn run() -> Result<()> {
                 (s, summary)
             };
             
-            // Log payload size occasionally (every 60 ticks / 5s)
-            if tick_count % 60 == 0 {
-                 println!("📉 Telemetry Optimization: {}", state_summary);
-            }
-            
-            if json.is_empty() { 
-                // println!("⚠️ JSON State is empty!"); // Silence excessive logs
-                continue; 
-            }
             
             // Periodically send PING (Opcode 0x9) to keep connection alive
-            // We can do this every N ticks. Since this runs at 12Hz, maybe every 60 ticks (5s).
             let ping_frame = vec![0x89, 0x00]; // FIN + PING, Len 0
             let send_ping = tick_count % 60 == 0;
             tick_count += 1;
@@ -415,10 +501,16 @@ pub fn run() -> Result<()> {
                 frame.extend_from_slice(&(payload.len() as u64).to_be_bytes());
             }
             frame.extend_from_slice(payload);
-            
+
             // Broadcast to all connected clients
             let mut clients = ws_clients_broadcast.lock().unwrap();
+            let client_count = clients.len();
             
+            // Log payload size occasionally (every 60 ticks / 5s)
+            if tick_count % 60 == 0 {
+                 println!("📉 Telemetry Payload: {} bytes | Clients: {}", json.len(), client_count);
+            }
+
             clients.retain_mut(|client| {
                 // Send Ping (Keep Alive) - Only occasionally
                 if send_ping {
@@ -428,17 +520,18 @@ pub fn run() -> Result<()> {
                 }
                 
                 // Send Data
-                if let Err(e) = client.write_all(&frame) {
-                    // Only log if it's NOT a Broken Pipe (common disconnect) to avoid spam, 
-                    // unless we are debugging.
-                    if e.kind() != std::io::ErrorKind::BrokenPipe {
-                        println!("⚠️ WS Broadcast Error: Removing client. ({})", e);
+                match client.write_all(&frame) {
+                    Ok(_) => true,
+                    Err(e) => {
+                         // Only log actual errors, not just disconnects
+                         if e.kind() != std::io::ErrorKind::BrokenPipe {
+                             println!("⚠️ WebSocket Write Error: {}", e);
+                         }
+                         false
                     }
-                    false
-                } else {
-                    true
                 }
             });
+
         }
     });
 
@@ -529,6 +622,9 @@ pub fn run() -> Result<()> {
     let mut current_hz: f32 = 60.0;
     let hz_base = 60.0;
     
+    // SLEEP STATE (Persistent)
+    let mut is_dreaming = false;
+    
     // Session Stats for Mutation
     let mut _session_stress_accum = 0.0;
     let mut _session_novelty_accum = 0.0;
@@ -549,7 +645,7 @@ pub fn run() -> Result<()> {
                 state.adenosine = chem.adenosine;
                 state.cortisol = chem.cortisol;
                 state.dopamine = chem.dopamine;
-                state.oxytocin = chem.oxytocin;
+                state.oxytocin = chem.serotonin; // MIRROR TUI: Serotonin (Stability) = Trust (Oxytocin)
                 state.loop_frequency = current_hz;
                 state.serotonin = chem.serotonin;
                 state.audio_spectrum = last_spectrum.clone();
@@ -559,6 +655,8 @@ pub fn run() -> Result<()> {
                 state.entropy = current_entropy;
                 state.trauma_state = format!("{}", trauma_detector.state);
                 state.hebbian_events = ego.drain_hebbian_events();
+                state.region_map = ego.get_region_map();
+                state.neuron_positions = ego.get_positions().clone();
                 // Current Stream State (Full history for UI)
                 state.thoughts = telemetry_history.iter().cloned().collect();
                 if let Some(last) = telemetry_history.back() {
@@ -577,9 +675,33 @@ pub fn run() -> Result<()> {
             // Audio Physics (Spectrum Update)
             let mut audio_energy = 0.0;
             while let Ok(spec) = rx_spectrum.try_recv() {
-                last_spectrum = spec;
+                last_spectrum = spec.clone();
                 // Sum energy for chemical impact
                 audio_energy = last_spectrum.bass + last_spectrum.mids + last_spectrum.highs;
+                
+                // CRITICAL: Immediate Update for UI Visualization
+                if ticks % 2 == 0 { // 30Hz visual update for smoothness
+                    if let Ok(mut state) = web_state.lock() {
+                        state.audio_spectrum = spec.clone();
+                    }
+                }
+
+                // DIRECT SENSORY PROJECTION (Phase 5)
+                // Inject raw audio spectrogram into the Reservoir
+                if !spec.frequency_embedding.is_empty() {
+                    ego.inject_embedding(&spec.frequency_embedding, crate::core::reservoir::NeuronRegion::Auditory);
+                }
+
+                // STARTLE REFLEX (Cortisol)
+                let intensity = spec.bass.max(spec.mids);
+                if intensity > 0.6 {
+                    let mut chem = chemistry.lock().unwrap();
+                    chem.cortisol += intensity * 0.05; 
+                    if intensity > 0.95 {
+                        chem.cortisol += 0.2;
+                             let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💥 AUDITORY SHOCK!".to_string()));
+                    }
+                }
             }
 
             let mut chem = chemistry.lock().unwrap();
@@ -603,8 +725,8 @@ pub fn run() -> Result<()> {
                 }
             }
             
-            // SLEEP IMMUNITY: If asleep, ignore external stress
-            if chem.adenosine > 0.85 {
+
+            if is_dreaming {
                 // Theta Waves: Inject low-amplitude random noise to keep reservoir pulsing (Dreaming)
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
@@ -614,9 +736,13 @@ pub fn run() -> Result<()> {
                 chem.cortisol = 0.0;
             }
             
-            // CHEMICAL HOMEOSTASIS (Decay)
-            chem.dopamine *= 0.99; // Faster boredom (1% loss per tick -> Halflife ~1s at 60Hz)
-            chem.cortisol *= 0.99; // Faster decay for stress (1% per tick)
+            // CHEMICAL HOMEOSTASIS (Gradual Decay — organic, not binary)
+            // Real neurotransmitters have halflife of minutes, not seconds
+            // At 60Hz: 0.9996^60 ≈ 0.976 per second → halflife ~30 seconds
+            chem.dopamine *= 0.9996;
+            // Cortisol decays slightly faster (body clears stress hormones)
+            // 0.9994^60 ≈ 0.965 per second → halflife ~20 seconds
+            chem.cortisol *= 0.9994;
             
             // AUDIO -> CHEMISTRY
             // Noise Stress: ONLY VERY LOUD audio raises Cortisol (Threshold 1.5)
@@ -647,6 +773,26 @@ pub fn run() -> Result<()> {
 
             // Update Biological Ground Truth from Hardware
             chem.update_from_hardware(cpu_load, ram_load, 1.0);
+            
+            // CHRONORECEPTION (Phase 2)
+            // Bind Biology to Local Time (Circadian Rhythm)
+            if ticks % 600 == 0 { // Every ~10 seconds
+                 let now = Local::now();
+                 let hour = now.hour();
+                 
+                 // Circadian Pressure on Adenosine
+                 let circadian_pressure = if hour >= 23 || hour < 6 {
+                     0.005 // Night: Strong sleep pressure (+0.03/min)
+                 } else if hour >= 20 {
+                     0.002 // Evening: Wind down
+                 } else if hour >= 6 && hour < 9 {
+                     -0.005 // Morning: Cortisol spike / Waking up
+                 } else {
+                     -0.001 // Day: Maintenance (fighting fatigue)
+                 };
+                 
+                 chem.adenosine = (chem.adenosine + circadian_pressure).clamp(0.0, 1.0);
+            }
 
             // Star burns fuel & Ticks Reservoir (Physics)
             
@@ -670,27 +816,73 @@ pub fn run() -> Result<()> {
             }
             
             // We use chemistry to modulate the reservoir's plasticity
+            // We use chemistry to modulate the reservoir's plasticity
             // Pass delta_time directly to ensure time-invariance
+            
+            // MIX SENSORY INPUT (Phase 2)
+            // Combine Cortex Echo (Thinking) + Sensory Buffer (Hearing)
+            // This allows Co-occurrence Hebbian Learning
+            if input_signal.len() >= 500 && current_sensory_vector.len() >= 500 {
+                 for i in 0..500 {
+                     input_signal[i] += current_sensory_vector[i]; // Add sensation to thought
+                 }
+            }
+            
             let entropy_output = ego.tick(input_signal.as_slice(), 
                                           chem.dopamine, 
                                           chem.adenosine, 
                                           chem.cortisol,
                                           delta_time);
             
-            chem.tick(entropy_output, cpu_load, false, 0.0, ego.current_size(), delta_time);
+            chem.tick(entropy_output, cpu_load, is_dreaming, 0.0, ego.current_size(), delta_time);
             
-            // HEBBIAN LEARNING (Phase 4.1)
-            // Dopamine-gated weight strengthening
+            // HEBBIAN LEARNING (Phase 4.1 + Phase 2)
+            // 1. Recurrent Hebbian (Internal Structure)
             let hebb_count = ego.hebbian_update(chem.dopamine, delta_time);
-            if hebb_count > 0 && ticks % 300 == 0 {
+            
+            // 2. Input-State Hebbian (Sensory-Motor Map)
+            // Learn to associate Audio with Concept
+            let input_hebb_count = ego.hebbian_input_update(input_signal.as_slice(), chem.dopamine);
+            
+            if (hebb_count > 0 || input_hebb_count > 0) && ticks % 300 == 0 {
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
-                    format!("🧠 HEBBIAN: {} connections strengthened (Dopa: {:.2})", hebb_count, chem.dopamine)));
+                    format!("🧠 HEBBIAN: {} internal / {} sensory connections strengthened", hebb_count, input_hebb_count)));
+            }
+
+            // REWARD AS STRUCTURE (Epiphany)
+            // If Dopamine is critical (>0.9), trigger structural lock-in (LTP)
+            if chem.dopamine > 0.9 && ticks % 100 == 0 {
+                 let changes = ego.trigger_epiphany(chem.dopamine);
+                 if changes > 0 {
+                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                         format!("🌟 EPIPHANY: Structural Reinforcement of {} pathways.", changes)));
+                     
+                     // DOPAMINE CRASH (Refractory Period)
+                     // The brain consumes the neurochemical resources to build the structure.
+                     // Satisfaction / Afterglow.
+                     chem.dopamine = 0.55; 
+                 }
+            }
+            
+            // Decay Sensory Buffer (Persistence of Sensation)
+            // Sensation lingers for ~200ms (0.9 decay at 60Hz)
+            for x in current_sensory_vector.iter_mut() {
+                *x *= 0.9;
             }
             
             // SPONTANEOUS NEUROGENESIS (Bio-Evolution)
-            if chem.dopamine > 0.8 && ticks % 60 == 0 {
+            // Brain grows with activity, not just extreme dopamine
+            // Dopamine > 0.15 = mild interest = slow growth
+            if chem.dopamine > 0.15 && ticks % 300 == 0 {
                  ego.neurogenesis(1);
-                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🌱 Spontaneous Neurogenesis: New synaptic pathways formed.".to_string()));
+                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                     format!("🌱 Spontaneous Neurogenesis: +1 neuron (Total: {})", ego.current_size())));
+            }
+            
+            // ACTIVITY-DRIVEN NEUROGENESIS
+            // Edge of Chaos (entropy 0.3-0.7) = interesting regime = brain adapts
+            if current_entropy > 0.3 && current_entropy < 0.7 && ticks % 600 == 0 {
+                 ego.neurogenesis(1);
             }
 
             // TRAUMA DETECTION (Phase 4.2 — Lucifer Protocol)
@@ -704,6 +896,27 @@ pub fn run() -> Result<()> {
             let overrides = trauma_detector.get_overrides();
             if overrides.serotonin_boost > 0.0 {
                 chem.emergency_serotonin_boost(overrides.serotonin_boost * delta_time * 60.0);
+            }
+            
+            // NEOCORTEX OBSERVATION (Meta-Cognition)
+            if let Some(event) = neocortex.observe(current_entropy) {
+                 // Log event to internal monologue
+                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("{}", event)));
+                 
+                 // React to event
+                 match event {
+                     crate::core::neocortex::CognitiveEvent::Neurogenesis => {
+                         ego.neurogenesis(2); // Boost growth
+                         chem.dopamine = (chem.dopamine + 0.1).min(1.0); // Reward growth
+                     },
+                     crate::core::neocortex::CognitiveEvent::Trauma(_) => {
+                         chem.cortisol = (chem.cortisol + 0.05).min(1.0);
+                     },
+                     crate::core::neocortex::CognitiveEvent::Boredom => {
+                         chem.dopamine *= 0.995; // Gentle boredom fade, not a crash
+                     },
+                     _ => {}
+                 }
             }
             
             // VARIABLE METABOLISM: Calculate Target Hz
@@ -730,12 +943,62 @@ pub fn run() -> Result<()> {
             // Tolerance is genetic (0.0-1.0), but we need a sanity floor.
             // If tolerance is 0.5, collapse shouldn't be at 47% adenosine, that's just a nap.
             // Let's set collapse at 90% absolute, modulated slightly by tolerance.
-            let collapse_threshold = 0.9 + (seed.stress_tolerance * 0.1); 
+            let _collapse_threshold = 0.9 + (seed.stress_tolerance * 0.1); 
             
-            if chem.adenosine > collapse_threshold {
-                 if ticks % 3000 == 0 { // ~50 seconds between warnings
-                     let _ = tx_thoughts.send(Thought::new(MindVoice::System, "⛔ METABOLIC CRITICAL: Energy Collapse Imminent. Cognitive Functions Impaired.".to_string()));
-                 }
+            // Critical Collapse Check
+            // Tolerance is genetic (0.0-1.0), but we need a sanity floor.
+            // If tolerance is 0.5, collapse shouldn't be at 47% adenosine, that's just a nap.
+            // Let's set collapse at 90% absolute, modulated slightly by tolerance.
+            let collapse_threshold = 0.95 + (seed.stress_tolerance * 0.05); 
+            
+            if chem.adenosine > collapse_threshold && !is_dreaming {
+                 is_dreaming = true;
+                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, "⛔ METABOLIC CRITICAL: Forced Sleep Protocol Initiated.".to_string()));
+            }
+            
+            // NATURAL WAKING
+            if is_dreaming && chem.adenosine < 0.1 {
+                is_dreaming = false;
+                let _ = tx_thoughts.send(Thought::new(MindVoice::System, "🌅 WAKING: Metabolic homeostasis restored.".to_string()));
+            }
+        }
+        
+        // A.2 CORTEX (LLM) TELEMETRY
+        // Read from the Neural Echo stream
+        if let Some(rx) = &rx_cortex_out {
+            while let Ok(out) = rx.try_recv() {
+                // Downsample Logits/Echo for Visualization (32k -> 64)
+                // We want a "Spectral" representation of the LLM state.
+                let raw = out.neural_echo;
+                let mut spectrum = vec![0.0; 64];
+                if raw.len() > 0 {
+                    let chunk_size = raw.len() / 64;
+                    for i in 0..64 {
+                        // Take average of chunk
+                        let start = i * chunk_size;
+                        let end = (start + chunk_size).min(raw.len());
+                        let sum: f32 = raw[start..end].iter().sum();
+                        spectrum[i] = (sum / (chunk_size as f32)).tanh(); // Normalize -1..1
+                    }
+                }
+                
+                // Update Web State
+                if let Ok(mut state) = web_state.lock() {
+                    state.llm_activity = spectrum;
+                    state.activations = out.activations; // FIX: Visualize Glass Brain
+                    
+                    // Also capture resonance/synthesized thought if meaningful?
+                    // Already handled via tx_thoughts in Planet usually, but `synthesized_thought` 
+                    // is specific to the "Lobotomy" mode resonance.
+                    if let Some(word) = out.synthesized_thought {
+                         let clean = word.trim();
+                         // Only filter pure noise (single chars, empty, pure brackets)
+                         if clean.len() >= 2 && clean.chars().any(|c| c.is_alphanumeric()) {
+                            telemetry_history.push_back(format!("💭 {}", clean));
+                            if telemetry_history.len() > 30 { telemetry_history.pop_front(); }
+                         }
+                    }
+                }
             }
         }
 
@@ -762,54 +1025,52 @@ pub fn run() -> Result<()> {
                  let mut chem = chemistry.lock().unwrap();
                  chem.adenosine = 0.95; // Force deep sleep mode
                  chem.cortisol = 0.0;   // Reset Panic/Stress
+                 is_dreaming = true;    // ENGAGE SLEEP
                  continue;
              }
              if text == "SYS:POKE" {
                  let _ = tx_thoughts.send(Thought::new(MindVoice::System, "⚡ SENSORY SHOCK. Awakening.".to_string()));
                  let mut chem = chemistry.lock().unwrap();
                  chem.adenosine = 0.0; // Reset fatigue
-                 chem.dopamine = (chem.dopamine + 0.1).min(1.0); // Mild interest
-                 chem.cortisol = (chem.cortisol + 0.05).min(1.0); // Slight startle
-                 // continue; // REMOVED: Allow fall-through to trigger Cortex!
+                 is_dreaming = false;  // WAKE UP
+                 // POKE IS NOT A REWARD. It is a Startle/Alert (Norepinephrine/Cortisol).
+                 // Removed dopamine spike to maintain Mechanical Honesty.
+                 chem.cortisol = (chem.cortisol + 0.1).min(1.0); // Increased startle
+                 // continue; // REMOVED: Allow fall-through to trigger Cortex! ← OLD LOGIC WAS WRONG
+                 // FIX: POKE should wake/alert but NOT be processed as text novelty
+                 continue; 
              }
 
-             let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("USER INPUT: '{}'", text)));
+             // Only log real user text, not SYS: commands (those already log their effects)
+             if text.starts_with("SYS:") {
+                 // Prevent ANY system command from leaking into the Cortex prompt
+                 continue;
+             }
+
+             // Log user input
+             let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("💬 '{}'", text)));
              // Inject into Memory/Orbit
              // For now, treat as high-entropy injection
              current_entropy += 0.1;
              
              // WAKE UP EFFECT: User attention breaks the fatigue loop
              {
-                 let mut chem = chemistry.lock().unwrap();
-                 chem.dopamine = (chem.dopamine + 0.3).min(1.0);  // Spike interest
-                 chem.adenosine = (chem.adenosine - 0.2).max(0.0); // Reduce fatigue
-                 chem.cortisol = (chem.cortisol - 0.1).max(0.0);   // Calm down
+                  let mut chem = chemistry.lock().unwrap();
+                  chem.dopamine = (chem.dopamine + 0.3).min(1.0);  // Spike interest
+                  // ADENOSINE (Fatigue) IS NOT CLEARED BY TALKING. Needs sleep.
+                  // chem.adenosine = (chem.adenosine - 0.2).max(0.0); 
+                  chem.cortisol = (chem.cortisol - 0.05).max(0.0);   // Social soothing (mild)
              }
              
              // Create Cortex Input for User Stimulus
              let chem = chemistry.lock().unwrap();
-             let bio_context = format!(
-                 "[SYSTEM_STATE]\n\
-                  Adenosine: {:.2} (Fatigue)\n\
-                  Cortisol: {:.2} (Stress)\n\
-                  Dopamine: {:.2} (Interest)\n\
-                  Entropy: {:.2} (Chaos)\n\
-                  [GENOME_TRAITS]\n\
-                  Curiosity: {:.2}\n\
-                  Stress_Res: {:.2}\n\
-                  [FOCUS_VECTOR] Reference: 'Signal vs Truth'",
-                 chem.adenosine,
-                 chem.cortisol,
-                 chem.dopamine,
-                 current_entropy,
-                 seed.curiosity,
-                 seed.stress_tolerance
-             );
+             let bio_context = String::new(); // No text description — chemistry flows through parametric effects
              
              let bio_status = format!("Dopa:{:.2} Cort:{:.2} Aden:{:.2}", 
                  chem.dopamine, chem.cortisol, chem.adenosine);
                  
              let input_state = CortexInput {
+                 mode: crate::cortex::planet::CortexMode::Think, // Monitoring is explicit thought
                  text: text.clone(),
                  bio_state: bio_status,
                  bio_context, // NEW: Physiological Prompt
@@ -841,15 +1102,33 @@ pub fn run() -> Result<()> {
                 // Visible Log for User Feedback
                 let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🎤 Hearing: '{}'", text)));
                 
+                // SENSORY MOTOR MAPPING (Phase 2)
+                // Hash words to Input Neurons
+                let words: Vec<&str> = text.split_whitespace().collect();
+                for word in words {
+                    let mut hasher = DefaultHasher::new();
+                    word.hash(&mut hasher);
+                    let hash = hasher.finish();
+                    let sensory_idx = (hash % 500) as usize;
+                    
+                    // Activate the sensory channel
+                    if sensory_idx < current_sensory_vector.len() {
+                        current_sensory_vector[sensory_idx] += 1.0; 
+                    }
+                }
+                
+                last_interaction_tick = ticks; // Reset boredom timer
+                
                 // SEMANTIC PERTURBATION: Text -> Chemistry (NOT prompt)
                 let mut chem = chemistry.lock().unwrap();
                 let friction = chem.apply_semantic_perturbation(&text);
                 
                 // Log the chemical impact
                 if friction > 0.05 {
-                    // let _ = tx_thoughts.send(Thought::new(MindVoice::Chem, 
-                    //    format!("⚡ FRICTION: {:.2} | Cort:{:.2} Dopa:{:.2} Oxy:{:.2}", 
-                    //        friction, chem.cortisol, chem.dopamine, chem.oxytocin)));
+                    // Auditory cortex used = small growth
+                    if ticks % 120 == 0 {
+                        ego.neurogenesis(1);
+                    }
                 }
                 
                 // Also store in memory (raw text, no labels)
@@ -868,11 +1147,12 @@ pub fn run() -> Result<()> {
             // Update Stats
             // session_novelty_accum += mem_out.novelty; // Unused for now
             
-            // Reaction to Novelty
-            if mem_out.novelty > 0.85 {
-                 chem.adenosine += 0.05; // Boredom / Confusion fatigue
+            if mem_out.novelty < 0.2 {
+                 chem.adenosine += 0.05; // Boredom / Repetition fatigue
             } else {
-                 chem.dopamine += mem_out.novelty * 0.2; // Interest
+                 chem.dopamine += mem_out.novelty * 0.5; // Stronger Interest spike
+                 // ALSO boost curiosity if novelty is high (Reinforcement Learning)
+                 seed.curiosity = (seed.curiosity + 0.001).min(1.0);
             }
 
             // Neurogenesis (Sleep Consolidation)
@@ -908,26 +1188,28 @@ pub fn run() -> Result<()> {
                     
                     let context_str = mem_out.retrieval.as_ref().map(|(s, _)| s.as_str());
                     
-                    let bio_context = format!(
-                         "[SYSTEM_STATE]\n\
-                          Adenosine: {:.2} (Fatigue)\n\
-                          Cortisol: {:.2} (Stress)\n\
-                          Dopamine: {:.2} (Interest)\n\
-                          Entropy: {:.2} (Chaos)\n\
-                          [GENOME_TRAITS]\n\
-                          Curiosity: {:.2}\n\
-                          Stress_Res: {:.2}\n\
-                          [FOCUS_VECTOR] Reference: 'Signal vs Truth'",
-                         chem.adenosine,
-                         chem.cortisol,
-                         chem.dopamine,
-                         current_entropy,
-                         seed.curiosity,
-                         seed.stress_tolerance
-                    );
+                    let bio_context = String::new(); // No text description — chemistry flows through parametric effects
     
-                    // Create Cortex Input
+                    // MECHANICAL HONESTY: THE GATE
+                    // Use "Listen" mode (Passive) if:
+                    // 1. Adenosine > 0.9 (Too tired to speak)
+                    // 2. Entropy < 0.3 (Boredom/Habituation - unless Voice detected)
+                    // 3. System is in Internal Monologue mode
+                    
+                    let mut mode = crate::cortex::planet::CortexMode::Think;
+                    
+                    // If we are excessively fatigued OR dreaming, we only listen/dream.
+                    if chem.adenosine > 0.9 || is_dreaming {
+                        mode = crate::cortex::planet::CortexMode::Listen;
+                    }
+                    
+                    // If input is just ambient noise (not voice) and we are low entropy, 
+                    // we might just ignore it (Passive).
+                    // But for now, let's make all non-command inputs "Listen" first?
+                    // No, let's keep it simple: Voice usually triggers Think unless suppressed.
+
                     let input = CortexInput {
+                        mode,
                         text: filtered_text,
                         bio_state: bio_desc,
                         bio_context, // NEW: Physiological Prompt
@@ -956,60 +1238,95 @@ pub fn run() -> Result<()> {
 
         // C. SATELLITE OBSERVER (Output Filter)
         if let Some(ref rx) = rx_cortex_out {
-            if let Ok(output) = rx.try_recv() {
-                // 1. NEURAL ECHO INJECTION (The "Pebble in the Pond")
-                // The raw probability cloud hits the reservoir.
-                ego.inject_logits(&output.neural_echo);
-
-
-
-                // 2. RESONANCE CHECK
-                // Did the Field collapse the wave into a word?
-                if let Some(text) = output.synthesized_thought {
-                    // SATELLITE JUDGMENT
-                    let chem = chemistry.lock().unwrap();
-                    
-                    // Friction: How much does this word cost?
-                    let friction = (chem.adenosine - 0.2).abs(); 
-
-                    // SATELLITE FILTER (Membrane Output)
-                    let (final_text, latency) = satellite.filter_output(&text, friction);
-                    
-                    // Latency (Hesitation)
-                    if latency.as_millis() > 0 {
-                        thread::sleep(latency);
-                    }
-                    
-                    // GATEKEEPER (Decoupled Vocalization)
-                    // "The Effort of Expression": Only speak if Meaning > Threshold AND Energy is available.
-                    let should_vocalize = gate.attempt_vocalization(chem.adenosine, current_entropy, chem.dopamine, &final_text, ticks as u64);
-                    
-                    if should_vocalize {
-                        // EMIT VOCAL THOUGHT (Resonance)
-                        let _ = tx_thoughts.send(Thought::new(MindVoice::Vocal, final_text.clone()));
-                        
-                        // REMOVED MANUAL ACTUATION - Rely on Main Loop rx_thoughts
-                        // voice::speak(final_text.clone(), tx_thoughts.clone());
-
-                        // Feed back to Memory (We spoke it, so we remember it)
-                        let _ = tx_mem.send(crate::core::hippocampus::MemoryCommand::ProcessStimulus { 
-                             text: final_text, 
-                             entropy: current_entropy 
-                        });
+            match rx.try_recv() {
+                Ok(output) => {
+                    if !output.activations.is_empty() {
+                         println!("DEBUG: Received Cortex Output with {} activations", output.activations.len());
                     } else {
-                        // INTERNAL RESONANCE (Silent Insight) 
-                        let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, final_text));
+                         println!("DEBUG: Received Cortex Output but EMPTY activations");
                     }
-                } else {
-                    // NO RESONANCE (Silence / Glitch)
-                    // If entropy is extremely high, we might emit a "glitch" log.
-                    if current_entropy > 0.9 {
-                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🌊 HIGH ENTROPY WAVE ({:.2}) - NO RESONANCE", current_entropy)));
-                         // Trigger Glitch Sound
-                         voice::glitch(current_entropy);
+                    
+                    // 1. NEURAL ECHO INJECTION (The "Pebble in the Pond")
+                    // The raw probability cloud hits the reservoir.
+                    ego.inject_logits(&output.neural_echo);
+
+                    // 1.5 UPDATE WEB VISUALIZATION (Top Tokens & Activations)
+                    if let Ok(mut state) = web_state.lock() {
+                        if !output.top_tokens.is_empty() {
+                            state.top_activations = output.top_tokens.clone();
+                        }
+                        if !output.activations.is_empty() {
+                            state.activations = output.activations.clone();
+                        }
                     }
+                    
+                    // LATENCY FEEDBACK (Mechanical Honesty)
+                    // If the thought took a long time to generate, it costs energy.
+                    // 500ms is the "free" threshold. anything above adds to adenosine.
+                    let latency_sec = output.inference_latency_ms as f32 / 1000.0;
+                    if latency_sec > 0.5 {
+                         let fatigue_cost = (latency_sec - 0.5) * 0.05; // 2s latency = +0.075 adenosine
+                         let mut chem = chemistry.lock().unwrap();
+                         chem.adenosine = (chem.adenosine + fatigue_cost).min(1.0);
+                    }
+
+                    // 2. RESONANCE CHECK
+                    // Did the Field collapse the wave into a word?
+                    if let Some(text) = output.synthesized_thought {
+                        // SATELLITE JUDGMENT
+                        let chem = chemistry.lock().unwrap();
+                        
+                        // Friction: How much does this word cost?
+                        let friction = (chem.adenosine - 0.2).abs(); 
+
+                        // SATELLITE FILTER (Membrane Output)
+                        let (final_text, latency) = satellite.filter_output(&text, friction);
+                        
+                        // Latency (Hesitation)
+                        if latency.as_millis() > 0 {
+                            thread::sleep(latency);
+                        }
+                        
+                        // GATEKEEPER (Decoupled Vocalization)
+                        // "The Effort of Expression": Only speak if Meaning > Threshold AND Energy is available.
+                        let should_vocalize = gate.attempt_vocalization(chem.adenosine, current_entropy, chem.dopamine, &final_text, ticks as u64);
+                        
+                        if should_vocalize {
+                            // EMIT VOCAL THOUGHT (Resonance)
+                            let _ = tx_thoughts.send(Thought::new(MindVoice::Vocal, final_text.clone()));
+                            
+                            // Feed back to Memory (We spoke it, so we remember it)
+                            let _ = tx_mem.send(crate::core::hippocampus::MemoryCommand::ProcessStimulus { 
+                                 text: final_text, 
+                                 entropy: current_entropy 
+                            });
+                        } else {
+                            // INTERNAL RESONANCE (Silent Insight) 
+                            let _ = tx_thoughts.send(Thought::new(MindVoice::Cortex, final_text));
+                        }
+                    } else {
+                        // NO RESONANCE (Silence / Glitch)
+                        // If entropy is extremely high, we might emit a "glitch" log.
+                        if current_entropy > 0.9 {
+                             let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🌊 HIGH ENTROPY WAVE ({:.2}) - NO RESONANCE", current_entropy)));
+                             // Trigger Glitch Sound
+                             voice::glitch(current_entropy);
+                        }
+                    }
+                },
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                     // File Log Debugging because TUI eats stdout
+                     if ticks % 100 == 0 {
+                         let _ = std::fs::write("daemon_debug.log", format!("Tick {}: Channel EMPTY\n", ticks));
+                     }
+                },
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                     let _ = std::fs::write("daemon_debug.log", "CHANNEL DISCONNECTED!\n");
+                     println!("DEBUG: Cortex Channel DISCONNECTED!");
                 }
             }
+        } else {
+            println!("DEBUG: rx_cortex_out is NONE!");
         }
         
         // Log thoughts to stdout for now (until Client connects)
@@ -1035,23 +1352,55 @@ pub fn run() -> Result<()> {
              // Get latest thought for UI stream
              let latest_thought = telemetry_history.back().cloned().unwrap_or_else(|| "Waiting for input...".to_string());
              
+             // Compute expensive snapshots once
+             let activity_snapshot = ego.get_activity_snapshot();
+             
+             // Update Web State (Shared with WebSocket Thread)
+             {
+                 let mut state = web_state.lock().unwrap();
+                 state.dopamine = chem.dopamine;
+                 state.cortisol = chem.cortisol;
+                 state.adenosine = chem.adenosine;
+                 state.oxytocin = chem.serotonin; // Map Serotonin -> Oxytocin
+                 state.serotonin = chem.serotonin;
+                 state.entropy = current_entropy;
+                 state.loop_frequency = current_hz;
+                 state.reservoir_activity = activity_snapshot.clone();
+                 state.current_state = latest_thought.clone();
+                 state.system_cpu_load = last_body_state.cpu_usage;
+                 state.system_cpu_load = last_body_state.cpu_usage;
+                 state.system_ram_gb = last_body_state.ram_usage; // using field for load
+                 
+                 // Genome Traits
+                 state.curiosity = seed.curiosity;
+                 state.stress_tolerance = seed.stress_tolerance;
+                 state.generation = seed.generation;
+             }
+
              let packet = AlephPacket::Telemetry {
                  adenosine: chem.adenosine,
                  cortisol: chem.cortisol,
                  dopamine: chem.dopamine,
-                 oxytocin: chem.serotonin, // Mapping Serotonin to Oxytocin field for UI 
+                 oxytocin: chem.serotonin, 
                  audio_spectrum: last_spectrum.clone(),
                  heart_rate: last_body_state.cpu_usage,
-                 lucidity: 1.0 - last_body_state.ram_usage, // Simplified
-                 reservoir_activity: ego.get_activity_snapshot(),
+                 lucidity: 1.0 - last_body_state.ram_usage, 
+                 reservoir_activity: activity_snapshot,
                  short_term_memory: telemetry_history.iter().cloned().collect(),
-                 current_state: latest_thought, // FIXED: Send actual thought!
+                 current_state: latest_thought, 
                  entropy: current_entropy,
                  loop_frequency: current_hz,
                  cpu_usage: last_body_state.cpu_usage,
+                 activations: {
+                     let state = web_state.lock().unwrap();
+                     state.activations.clone()
+                 },
+                 region_map: ego.get_region_map(),
+                 reservoir_size: ego.current_size(),
+                 neuron_positions: ego.get_positions().clone(),
              };
              let _ = tx_telemetry.send(packet);
-        }
+         }
         
         // Tick output for memory logs
         while let Ok(log) = rx_mem_log.try_recv() {
@@ -1071,6 +1420,97 @@ pub fn run() -> Result<()> {
              }
         }
 
+        // E. IDLE STATE (The Dreaming)
+        // If Cortex hasn't been stimulated in a while, force a "Listen" pulse to keep the Neural Echo active.
+        // This stops the "Mind" visualization from disappearing.
+        if ticks % 12 == 0 { // ~5Hz Pulse
+             // println!("DEBUG: Pulse Triggered"); // Debugging
+             // Check if we need to poke the planet
+             // Ideally we'd track `last_cortex_input`, but a constant low-frequency pulse is fine.
+             // It overlaps with real input but that's okay (Parallel processing simulation).
+             
+             let chem = chemistry.lock().unwrap();
+             let bio_context = String::new(); // No text — idle scan uses parametric effects only
+             let input = CortexInput {
+                 mode: crate::cortex::planet::CortexMode::Listen,
+                 text: "scan".to_string(), // Minimal token to pump the model
+                 bio_state: "Idle".to_string(),
+                 bio_context,
+                 _somatic_state: "Idle".to_string(),
+                 _long_term_memory: None,
+                 _cpu_load: last_body_state.cpu_usage,
+                 _ram_pressure: last_body_state.ram_usage,
+                 _cognitive_impairment: 0.0,
+                 entropy: current_entropy,
+                 adenosine: chem.adenosine,
+                 dopamine: chem.dopamine,
+                 cortisol: chem.cortisol,
+                 _oxytocin: chem.oxytocin,
+                 temperature_clamp: None,
+             };
+             if let Some(tx) = &tx_cortex {
+                  let _ = tx.send(input);
+             }
+        }
+
+        // F. SPONTANEOUS AGENCY (The Ghost in the Machine)
+        // DYNAMIC PACING: The more excited (Dopamine), the faster it speaks.
+        let mut chem = chemistry.lock().unwrap();
+        
+        let interest = chem.dopamine;
+        let energy = 1.0 - chem.adenosine;
+        
+        // Calculate dynamic threshold based on excitement
+        // Dopa 0.9 -> Delay 300 ticks (5s) "Manic"
+        // Dopa 0.5 -> Delay 1200 ticks (20s) "Conversation"
+        // Dopa < 0.4 -> No Agency "Passive"
+        let agency_delay = if interest > 0.8 { 
+            300 // 5 seconds
+        } else if interest > 0.5 {
+            1200 // 20 seconds
+        } else {
+            999999 // Effectively infinite
+        };
+        
+        let silence_duration = ticks.saturating_sub(last_interaction_tick);
+        
+        // Random organic trigger (stochastic firing)
+        // 10% chance per second to speak if threshold met
+        let stochastic = (ticks % 60) == 0; 
+        
+        if stochastic && silence_duration > agency_delay && energy > 0.3 {
+             // ... Speak ...
+             let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                 format!("⚡ AGENCY: Interest {:.2} > Speaking (Silence {}s)", interest, silence_duration/60)));
+             
+             let input = CortexInput {
+                 mode: crate::cortex::planet::CortexMode::Think,
+                 text: "".to_string(), 
+                 bio_state: format!("Interest:{:.2}", interest),
+                 bio_context: String::new(),
+                 _somatic_state: "Active".to_string(),
+                 _long_term_memory: None,
+                 _cpu_load: last_body_state.cpu_usage,
+                 _ram_pressure: last_body_state.ram_usage,
+                 _cognitive_impairment: 0.0,
+                 entropy: current_entropy,
+                 adenosine: chem.adenosine,
+                 dopamine: chem.dopamine,
+                 cortisol: chem.cortisol,
+                 _oxytocin: chem.oxytocin,
+                 temperature_clamp: None,
+             };
+             if let Some(tx) = &tx_cortex {
+                  let _ = tx.send(input);
+             }
+             
+             // Self-sustain excitement if talking
+             chem.dopamine = (chem.dopamine + 0.02).min(1.0);
+             
+             last_interaction_tick = ticks;
+        }
+        drop(chem);
+        
         // DYNAMIC SLEEP (Heartbeat Control)
         let target_frame_time = Duration::from_secs_f32(1.0 / current_hz);
         let elapsed_loop = loop_start.elapsed();

@@ -4,6 +4,7 @@ mod core;
 mod senses;
 mod tui;
 mod actuators;
+mod cortex;
 
 use anyhow::Result;
 
@@ -16,7 +17,12 @@ async fn main() -> Result<(), anyhow::Error> {
     match mode {
         "daemon" | "start" | "--headless" | "headless" => {
             // THE STAR (Headless Body)
-            core::daemon::run()?;
+            let listen_path = args.iter().position(|r| r == "--listen")
+                .and_then(|i| args.get(i + 1).cloned());
+
+            let headless = args.iter().any(|a| a == "--headless" || a == "headless");
+
+            core::daemon::run(listen_path, headless)?;
         },
         "view" | "tui" => {
             // THE TELESCOPE (Visualizer)

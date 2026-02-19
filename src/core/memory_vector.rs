@@ -54,7 +54,7 @@ impl VectorStore {
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DType::F32, &device)? };
         let model = BertModel::load(vb, &config)?;
 
-        let store = Self {
+        let mut store = Self {
             memories: Vec::new(),
             model,
             tokenizer,
@@ -62,8 +62,11 @@ impl VectorStore {
             file_path: "memories.json".to_string(),
         };
         
-        // store.load_from_disk(); // EGO DEATH: We do not load past lives.
-        // println!("🧠 Hippocampus Loaded: {} memories.", store.memories.len());
+        if let Err(e) = store.load_from_disk() {
+            println!("⚠️ Hippocampus: No previous memories found (Genesis): {}", e);
+        } else {
+            println!("🧠 Hippocampus Loaded: {} memories.", store.memories.len());
+        }
         
         Ok(store)
     }
@@ -214,7 +217,16 @@ impl VectorStore {
         self.save_to_disk()
     }
 
-    // load_from_disk removed (unused)
+    pub fn load_from_disk(&mut self) -> Result<()> {
+        if let Ok(content) = fs::read_to_string(&self.file_path) {
+            let memories: Vec<MemoryRecord> = serde_json::from_str(&content)?;
+            self.memories = memories;
+            Ok(())
+        } else {
+            // File doesn't exist yet, which is fine
+            Err(anyhow::anyhow!("No memory file found"))
+        }
+    }
     pub fn memory_count(&self) -> usize {
         self.memories.len()
     }

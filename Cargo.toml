@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # --- MATEMÁTICA DEL CAOS (SISTEMA 1) ---
-nalgebra = "0.32"  # Álgebra lineal optimizada
+nalgebra = { version = "0.32", features = ["serde-serialize"] }  # Álgebra lineal optimizada
 rand = "0.9"       # Generador de caos (Latest)
 rand_distr = "0.5" # Distribuciones gaussianas (Latest)
 
@@ -37,3 +37,4 @@ ctrlc = "3.5.1"
 tungstenite = "0.24"                               # WebSocket for Web Dashboard
 sha1 = "0.10"                                      # WebSocket handshake
 base64 = "0.22"                                    # WebSocket handshake
+symphonia = { version = "0.5.5", features = ["all"] }

@@ -1,42 +1,37 @@
-import socket
-import base64
-import os
+import asyncio
+import websockets
+import json
 
-def test_handshake():
-    host = "127.0.0.1"
-    port = 3030
-    
-    # Generate random key
-    key = base64.b64encode(os.urandom(16)).decode('utf-8')
-    print(f"DEBUG: Generated Key: {key}")
-
-    junk_header = "X-Junk: " + ("A" * 2000) + "\r\n"
-    request = (
-        f"GET / HTTP/1.1\r\n"
-        f"Host: {host}:{port}\r\n"
-        f"Upgrade: websocket\r\n"
-        f"Connection: Upgrade\r\n"
-        f"Sec-WebSocket-Key: {key}\r\n"
-        f"Sec-WebSocket-Version: 13\r\n"
-        f"{junk_header}"
-        f"\r\n"
-    )
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def hello():
+    uri = "ws://localhost:3030"
     try:
-        s.connect((host, port))
-        print(f"Connected to {host}:{port}")
-        s.sendall(request.encode('utf-8'))
-        
-        response = s.recv(4096)
-        print("\n--- SERVER RESPONSE ---")
-        print(response.decode('utf-8', errors='replace'))
-        print("-----------------------")
-        
+        async with websockets.connect(uri, ping_interval=None) as websocket:
+            print(f"Connected to {uri}")
+            
+            # Send specific "upgrade" if needed, but pure WS connect should work 
+            # based on daemon.rs implementation.
+            
+            while True:
+                msg = await websocket.recv()
+                try:
+                    data = json.loads(msg)
+                    # Handle Rust Enum wrapping if present
+                    payload = data.get("Telemetry", data)
+                    
+                    activity = payload.get("reservoir_activity", [])
+                    activations = payload.get("activations", [])
+                    
+                    print(f"Update: {len(msg)} bytes | Reservoir Active: {len(activity)} (Sparse) | Activations: {len(activations)} nodes")
+                    
+                    if len(activity) > 0:
+                        # Print first few items to verify format
+                        print(f"Sample: {activity[:5]}")
+                        
+                except json.JSONDecodeError:
+                    print(f"Received (Raw): {msg[:100]}...")
+                    
     except Exception as e:
         print(f"Error: {e}")
-    finally:
-        s.close()
 
 if __name__ == "__main__":
-    test_handshake()
+    asyncio.run(hello())

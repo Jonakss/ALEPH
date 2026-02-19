@@ -1,16 +1,38 @@
-# React + Vite
+# ALEPH Neural Dashboard (React)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This directory contains the React-based frontend for the ALEPH Observer. It replaces the legacy static HTML implementation.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Real-time Neurochemistry**: Visualization of Dopamine, Cortisol, Adenosine, Oxytocin, and Serotonin levels.
+- **Sparklines**: Historical trend data for internal chemical states.
+- **3D Neural Reservoir**: Interactive Three.js visualization of the active neural topology.
+- **Consciousness Stream**: Live feed of the system's thought process and logs.
+- **Bidirectional Control**: Send stimuli (text) or actions (Poke, Sleep, Dream) to the ALEPH daemon.
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Install dependencies**:
+    ```bash
+    npm install
+    ```
 
-## Expanding the ESLint configuration
+2.  **Run Development Server**:
+    ```bash
+    npm run dev
+    ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+3.  **Build for Production**:
+    ```bash
+    npm run build
+    ```
+
+## Architecture
+
+- **`useAlephSocket`**: Custom hook managing the WebSocket connection to the Rust backend (daemon).
+- **`components/`**: Functional React components for each dashboard panel.
+- **`hooks/`**: Custom hooks for logic encapsulation.
+
+## Connection
+
+The dashboard connects to `ws://localhost:3030` by default. Ensure the ALEPH backend (`cargo run --release`) is running.

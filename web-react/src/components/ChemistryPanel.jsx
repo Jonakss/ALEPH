@@ -24,6 +24,16 @@ const ChemRow = ({ label, value, color }) => (
   </div>
 );
 
+function getChemState(t) {
+    if (!t) return "OFFLINE";
+    if (t.cortisol > 0.7) return "⚠️ HIGH STRESS (Defense Mode)";
+    if (t.adenosine > 0.8) return "💤 FATIGUED (Pruning needed)";
+    if (t.dopamine > 0.7 && t.serotonin > 0.5) return "🚀 HYPER-LEARNING (Flow)";
+    if (t.dopamine > 0.6) return "✨ PLASTICITY ACTIVE";
+    if (t.serotonin < 0.3 && t.dopamine < 0.3) return "📉 DEPRESSED (Low Activity)";
+    return "⚖️ HOMEOSTASIS (Balanced)";
+}
+
 export function ChemistryPanel({ telemetry, history }) {
   const { dopamine, cortisol, adenosine, oxytocin, serotonin, trauma_state } = telemetry || {};
 
@@ -31,9 +41,28 @@ export function ChemistryPanel({ telemetry, history }) {
     <div className="panel chemistry-panel" style={{ gridColumn: 2, gridRow: 1 }}>
       <div className="panel-header">
         <div><span className="icon">⚗️</span> Neurochemistry</div>
-        <div style={{ fontSize: '10px', color: trauma_state?.includes('FIREFIGHTER') ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-            {trauma_state || 'STABLE'}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div style={{ fontSize: '10px', color: trauma_state?.includes('FIREFIGHTER') ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                {trauma_state || 'STABLE'}
+            </div>
+            <div style={{ fontSize: '9px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                {getChemState(telemetry)}
+            </div>
         </div>
+      </div>
+      
+      {/* GENOME TRAITS */}
+      <div style={{
+          display: 'flex', justifyContent: 'space-between', 
+          marginBottom: '12px', fontSize: '10px', color: 'var(--text-secondary)',
+          background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: '4px',
+          border: '1px solid rgba(255,255,255,0.05)'
+      }}>
+          <span style={{color: 'var(--accent-purple)'}}>🧬 GENOME v{telemetry?.generation ?? '?'}</span>
+          <span>
+            <span title="Curiosity" style={{marginRight:'8px'}}>🧐 {telemetry?.curiosity?.toFixed(2) ?? '-'}</span>
+            <span title="Stress Tolerance">🛡️ {telemetry?.stress_tolerance?.toFixed(2) ?? '-'}</span>
+          </span>
       </div>
       <div className="panel-body">
         <ChemRow label="Dopamine" value={dopamine || 0} color="linear-gradient(90deg, #ffd700, #ff8800)" />

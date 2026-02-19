@@ -51,7 +51,7 @@ impl Default for Telemetry {
 }
 
 pub mod client;
-mod avatar;
+pub mod avatar;
 mod monologue;
 
 // ui function removed (logic is in client.rs)

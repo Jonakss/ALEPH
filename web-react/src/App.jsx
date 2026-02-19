@@ -9,12 +9,24 @@ import { Controls } from './components/Controls';
 import './index.css';
 
 function App() {
-  const { telemetry, history, isConnected, sendStimulus, sendAction } = useAlephSocket();
+  const { telemetry, history, isConnected, sendStimulus, sendAction, debugInfo } = useAlephSocket();
 
   return (
     <div className="app-container">
       <Header isConnected={isConnected} telemetry={telemetry} />
       <TraumaBanner telemetry={telemetry} />
+      
+      {/* DEBUG OVERLAY */}
+      <div style={{ 
+          position: 'fixed', bottom: 10, right: 10, 
+          background: 'rgba(0,0,0,0.8)', color: '#0f0', 
+          padding: '10px', fontSize: '10px', zIndex: 9999,
+          pointerEvents: 'none', maxWidth: '300px', wordWrap: 'break-word', fontFamily: 'monospace'
+      }}>
+          STATUS: {isConnected ? 'CONN' : 'DISC'}<br/>
+          DEBUG: {debugInfo}<br/>
+          KEYS: {telemetry ? Object.keys(telemetry).join(', ') : 'NO DATA'}
+      </div>
       
       <div className="dashboard" style={{
         display: 'grid',

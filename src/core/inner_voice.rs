@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 
 use crate::core::thought::{Thought, MindVoice};
-use crate::core::planet::CortexInput;
+use crate::cortex::planet::CortexInput;
 // use rand::Rng; 
 
 /// Inner Voice - Silent rumination thread
@@ -29,6 +29,7 @@ pub fn spawn_inner_voice(
             // Send to Cortex for internal processing
             // Inner voice: no cognitive impairment (low-stress rumination)
             let input = CortexInput {
+                mode: crate::cortex::planet::CortexMode::Think, // Inner voice is active thought
                 text: format!("[SELF REFLECTION] {}", prompt),
                 bio_state: "Reflexión activa.".to_string(),
                 bio_context: "[SYSTEM_STATE]\n\

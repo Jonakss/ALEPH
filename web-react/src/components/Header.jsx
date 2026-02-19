@@ -1,7 +1,25 @@
 import React from 'react';
 
+function PulsingStat({ value, label }) {
+    const prevValue = React.useRef(value);
+    const [color, setColor] = React.useState('var(--text-primary)');
+
+    React.useEffect(() => {
+        if (value > prevValue.current) {
+            setColor('#00ff88'); // Green (Growth)
+            setTimeout(() => setColor('var(--text-primary)'), 1000);
+        } else if (value < prevValue.current) {
+            setColor('#ff3344'); // Red (Pruning)
+            setTimeout(() => setColor('var(--text-primary)'), 1000);
+        }
+        prevValue.current = value;
+    }, [value]);
+
+    return <div>{label}: <span style={{ color, transition: 'color 0.5s ease', fontWeight: 500 }}>{value || 0}</span></div>;
+}
+
 export function Header({ isConnected, telemetry }) {
-  const { loop_frequency, reservoir_size, entropy, hebbian_events } = telemetry || {};
+  const { loop_frequency, reservoir_size, entropy, hebbian_events, system_ram_gb, system_cpu_load } = telemetry || {};
 
   return (
     <header className="header" style={{
@@ -45,13 +63,15 @@ export function Header({ isConnected, telemetry }) {
         </div>
       </div>
       <div className="header-stats" style={{
-         display: 'flex', gap: '20px', fontSize: '12px', 
+         display: 'flex', gap: '20px', fontSize: '11px', 
          color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace"
       }}>
         <div>Hz: <span style={{color: 'var(--accent-cyan)', fontWeight: 500}}>{(loop_frequency || 0).toFixed(1)}</span></div>
-        <div>Neurons: <span style={{color: 'var(--accent-cyan)', fontWeight: 500}}>{reservoir_size || 0}</span></div>
-        <div>Entropy: <span style={{color: 'var(--accent-cyan)', fontWeight: 500}}>{(entropy || 0).toFixed(3)}</span></div>
-        <div>Hebbian: <span style={{color: 'var(--accent-cyan)', fontWeight: 500}}>{hebbian_events || 0}</span></div>
+        <div>RAM: <span style={{color: '#00ff88'}}>{(system_ram_gb || 0).toFixed(1)} GB</span></div>
+        <div>CPU: <span style={{color: '#00ff88'}}>{(system_cpu_load || 0).toFixed(0)}%</span></div>
+        <div style={{opacity: 0.5}}>|</div>
+        <PulsingStat label="N" value={reservoir_size} />
+        <div>S: <span style={{color: 'var(--text-primary)'}}>{(entropy || 0).toFixed(3)}</span></div>
       </div>
     </header>
   );

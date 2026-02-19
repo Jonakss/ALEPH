@@ -77,7 +77,10 @@ impl Hippocampus {
                     MemoryCommand::Shutdown { previous_genome, avg_friction, reply_tx } => {
                         let _ = log_tx.send("💀 Hippocampus: Shutting down... Crystallizing Soul.".to_string());
                         
-                        // 1. Crystallize (Now using Friction)
+                        // 1. Save Raw Memories (Persistence)
+                        let _ = hippo.store.save();
+
+                        // 2. Crystallize (Now using Friction)
                         let new_genome = SoulMaterializer::crystallize(&hippo.store, previous_genome, avg_friction);
                         
                         // 2. Reply

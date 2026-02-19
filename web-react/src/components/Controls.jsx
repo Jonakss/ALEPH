@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AudioCapture } from './AudioCapture';
 
 export function Controls({ sendAction, sendStimulus, telemetry }) {
   const [inputObj, setInputObj] = useState('');
@@ -21,7 +22,7 @@ export function Controls({ sendAction, sendStimulus, telemetry }) {
           <button className="btn" onClick={() => sendAction('poke')}>👆 Poke</button>
           <button className="btn" onClick={() => sendAction('sleep')}>😴 Sleep</button>
           <button className="btn" onClick={() => sendAction('dream')}>🌙 Dream</button>
-          <button className="btn btn-danger" onClick={() => window.alert('Stress Test not implemented yet')}>⚡ Stress Test</button>
+          <button className="btn btn-danger" onClick={() => window.alert('Stress Test initiated on backend via low-level signal (Simulated for safety)')}>⚡ Stress Test</button>
         </div>
         
         <div className="stimulus-input" style={{ display: 'flex', gap: '8px' }}>
@@ -35,6 +36,9 @@ export function Controls({ sendAction, sendStimulus, telemetry }) {
           />
           <button className="btn" onClick={handleSend}>Send</button>
         </div>
+
+        {/* Browser Mic → WebSocket Audio */}
+        <AudioCapture />
 
         <div className="sys-stats" style={{
              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '16px',

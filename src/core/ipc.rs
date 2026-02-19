@@ -9,24 +9,30 @@ pub enum AlephPacket {
         adenosine: f32,
         cortisol: f32,
         dopamine: f32,
-        oxytocin: f32, // Added
+        oxytocin: f32,
         
         // Sensory
         audio_spectrum: AudioSpectrum,
         
         // Proprioception
-        heart_rate: f32, // Derived from CPU
-        lucidity: f32,   // Derived from RAM/Entropy
-        reservoir_activity: Vec<f32>, // Neural Grid State
+        heart_rate: f32,
+        lucidity: f32,
+        reservoir_activity: Vec<f32>,
         
         // Narrative
-        short_term_memory: Vec<String>, // Last few thoughts
-        current_state: String, // "Dreaming", "Alert", "Panic"
-        entropy: f32, // Added for TUI Chart
+        short_term_memory: Vec<String>,
+        current_state: String,
+        entropy: f32,
         
         // System
-        loop_frequency: f32, // Actual Backend Hz
-        cpu_usage: f32,      // Hardware Load
+        loop_frequency: f32,
+        cpu_usage: f32,
+        activations: Vec<f32>,
+        region_map: Vec<u8>,
+        reservoir_size: usize,
+        
+        // Spatial Topology (Real backend positions)
+        neuron_positions: Vec<[f32; 3]>,
     },
     
     /// Client -> Daemon: Perturbations

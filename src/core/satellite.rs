@@ -42,7 +42,9 @@ impl Satellite {
         // - High Entropy (Inner Chaos) > Attention
         // - High Paranoia + Ontological Error
         
-        let rejection_threshold = attention + 0.1;
+        // Relaxed threshold: Allow more chaos to penetrate even if attention is lower.
+        // Was +0.1, now +0.25 to prevent "Stone Wall" silence.
+        let rejection_threshold = attention + 0.25; 
         let stimulus_chaos = entropy + (error_severity * 0.5); // Errors add to chaos cost
 
         if stimulus_chaos > rejection_threshold {

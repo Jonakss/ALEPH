@@ -76,6 +76,9 @@ pub fn run() -> Result<()> {
         current_state: "Unknown".to_string(),
         loop_frequency: 60.0,
         cpu_usage: 0.0,
+        activations: Vec::new(),
+        region_map: Vec::new(),
+        reservoir_size: 500,
     };
     
     // Input Buffer
@@ -129,6 +132,9 @@ pub fn run() -> Result<()> {
                                             entropy: 0.0, // Placeholder
                                             loop_frequency: 60.0,
                                             cpu_usage: 0.0,
+                                            activations: Vec::new(),
+                                            region_map: Vec::new(),
+                                            reservoir_size: 500,
                                         };
                                     }
                                 }
@@ -201,8 +207,8 @@ pub fn run() -> Result<()> {
             };
             
             // Truncate status to avoid breaking layout
-            let status_trimmed = if packet_data.len() > 25 { 
-                format!("{}...", &packet_data[..24]) 
+            let status_trimmed = if packet_data.chars().count() > 25 { 
+                format!("{}...", packet_data.chars().take(24).collect::<String>()) 
             } else { 
                 packet_data.clone() 
             };

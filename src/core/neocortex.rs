@@ -82,13 +82,14 @@ impl Neocortex {
             return Some(CognitiveEvent::Neurogenesis);
         }
         
-        // B. Sudden Spike (Attention)
-        if derivative > 0.15 {
+        // B. Sudden Spike (Attention) — only significant changes
+        if derivative > 0.25 {
              return Some(CognitiveEvent::StimulusStart(derivative));
         }
 
-        // C. Trauma (Panic Threshold) - Solo avisar si es muy alto
-        if current_entropy > 0.85 {
+        // C. Trauma (Panic Threshold) — normalized entropy naturally sits ~0.85
+        // Only fire when truly overwhelmed (near max entropy)
+        if current_entropy > 0.97 {
             return Some(CognitiveEvent::Trauma(current_entropy));
         }
 
