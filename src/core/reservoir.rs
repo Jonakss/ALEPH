@@ -292,9 +292,7 @@ impl FractalReservoir {
     pub fn inject_embedding(&mut self, embedding: &[f32], region: NeuronRegion) {
         if embedding.is_empty() { return; }
         
-        // Ensure input weights match. If not, we might need a dynamic projection or use a subset.
-        // For now, valid assumption: embedding size <= input_size. 
-        // If smaller, we pad. If larger, we truncate.
+        // Ensure input weights match
         let input_cols = self.input_weights.ncols();
         let mut padded_embedding = DVector::zeros(input_cols);
         
@@ -302,38 +300,49 @@ impl FractalReservoir {
             padded_embedding[i] = val;
         }
         
-        // Project: State += Input_Weights * Embedding
-        // We use a gain factor to modulate how strong raw senses are vs. recurrent thought
         let sensory_gain = 0.5; 
-        
         let impact = (&self.input_weights * padded_embedding) * sensory_gain;
-        self.state += &impact;
-        self.state.apply(|x| *x = x.clamp(-1.0, 1.0));
         
-        // Hebbian Exposure Tracking
-        // Neurons that light up due to this embedding get "tagged" with the region
+        // SPATIAL MASKING: Hardwire inputs to specific brain regions
+        // This fixes the "Green in Middle" visual bug by restricting Auditory input to the sides.
         for i in 0..self.size {
-            let activation = ((self.state[i] + 1.0) / 2.0).max(0.0);
-            let stimulus_strength = impact[i].abs();
+            let pos = self.positions[i];
             
-            if stimulus_strength > 0.1 && activation > 0.3 {
-                match region {
-                    NeuronRegion::Auditory => {
-                        if i < self.auditory_exposure.len() {
-                            self.auditory_exposure[i] += activation * stimulus_strength * 0.05;
-                        }
-                    },
-                    NeuronRegion::Semantic => {
-                        if i < self.semantic_exposure.len() {
-                            self.semantic_exposure[i] += activation * stimulus_strength * 0.05;
-                        }
-                    },
-                    NeuronRegion::Limbic => {
-                        if i < self.limbic_exposure.len() {
-                            self.limbic_exposure[i] += activation * stimulus_strength * 0.05;
-                        }
-                    },
-                    _ => {}
+            // Defines the "Receptive Field" for each sensory modality
+            let is_in_receptive_field = match region {
+                NeuronRegion::Auditory => pos[0].abs() > 25.0, // Lateral Temporal Lobes (Sides)
+                NeuronRegion::Semantic => pos[2] > 20.0,       // Frontal Lobe (Front)
+                NeuronRegion::Limbic => pos[1] < -20.0,        // Deep/Basal Ganglia (Bottom)
+                _ => true, // Association areas receive everything else
+            };
+
+            if is_in_receptive_field {
+                self.state[i] += impact[i];
+                self.state[i] = self.state[i].clamp(-1.0, 1.0);
+
+                // Hebbian Exposure Tagging
+                let activation = ((self.state[i] + 1.0) / 2.0).max(0.0);
+                let stimulus_strength = impact[i].abs();
+                
+                if stimulus_strength > 0.1 && activation > 0.3 {
+                    match region {
+                        NeuronRegion::Auditory => {
+                            if i < self.auditory_exposure.len() {
+                                self.auditory_exposure[i] += activation * stimulus_strength * 0.05;
+                            }
+                        },
+                        NeuronRegion::Semantic => {
+                            if i < self.semantic_exposure.len() {
+                                self.semantic_exposure[i] += activation * stimulus_strength * 0.05;
+                            }
+                        },
+                        NeuronRegion::Limbic => {
+                            if i < self.limbic_exposure.len() {
+                                self.limbic_exposure[i] += activation * stimulus_strength * 0.05;
+                            }
+                        },
+                        _ => {}
+                    }
                 }
             }
         }
@@ -578,7 +587,6 @@ impl FractalReservoir {
             self.size = new_size;
             
             // New neuron starts with 0 exposure — will specialize through use
-            self.semantic_exposure.push(0.0);
             self.auditory_exposure.push(0.0);
             self.limbic_exposure.push(0.0);
             self.last_activity.push(0.0);

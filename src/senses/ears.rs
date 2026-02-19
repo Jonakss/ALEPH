@@ -56,6 +56,7 @@ impl AudioListener {
         thought_tx: Sender<Thought>, 
         ears_tx: Sender<String>, 
         spectrum_tx: Sender<AudioSpectrum>,
+        word_embedding_tx: Sender<Vec<f32>>,
         mode: SensoryMode,
         ws_audio_rx: Option<Receiver<Vec<f32>>>,
     ) -> Result<Self, anyhow::Error> {
@@ -122,6 +123,7 @@ impl AudioListener {
         let worker_state = state.clone();
         let worker_ears_tx = ears_tx.clone();
         let worker_thought_tx = thought_tx.clone();
+        let worker_word_embed_tx = word_embedding_tx.clone();
 
         std::thread::spawn(move || {
              while let Ok(samples) = audio_work_rx.recv() {
@@ -169,6 +171,13 @@ impl AudioListener {
                                 || triggers.iter().any(|&t| text.contains(t) || text.to_lowercase().contains(&t.to_lowercase()));
 
                             if !text.is_empty() && !is_hallucination {
+                                // === WORD EMBEDDING PATHWAY ===
+                                // Convert transcribed words into a hash-based 64-dim vector
+                                // This hits the Semantic region ~50-200ms after sound
+                                // (Whisper inference latency = biologically real processing delay)
+                                let embedding = text_to_word_embedding(&text, 64);
+                                let _ = worker_word_embed_tx.send(embedding);
+                                
                                 let _ = worker_thought_tx.send(Thought::new(MindVoice::Sensory, format!("🎧 SEMANTIC ECHO: '{}'", text)));
                                 let _ = worker_ears_tx.send(text);
                             }
@@ -430,4 +439,46 @@ impl AudioListener {
             SensoryMode::Headless => unreachable!(), // Handled above
         }
     }
+}
+
+/// Convert text into a hash-based word embedding vector.
+/// 
+/// Each word is hashed into a consistent position in the vector space.
+/// Multiple words accumulate into the same vector, then it's L2-normalized.
+/// 
+/// This is NOT a real semantic embedding (like Word2Vec/BERT) — it's a 
+/// deterministic encoding that gives each word a unique "fingerprint" in
+/// the reservoir's input space. What matters mechanically is:
+/// 1. Same word → same activation pattern (consistency)
+/// 2. Different words → different patterns (discriminability) 
+/// 3. The DELAY is real (Whisper inference time = biological processing cost)
+fn text_to_word_embedding(text: &str, dim: usize) -> Vec<f32> {
+    let mut embedding = vec![0.0f32; dim];
+    
+    for word in text.split_whitespace() {
+        let word_lower = word.to_lowercase();
+        // Simple hash: djb2
+        let mut hash: u64 = 5381;
+        for byte in word_lower.bytes() {
+            hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
+        }
+        
+        // Scatter word energy across multiple dimensions
+        for k in 0..4 {
+            let idx = ((hash.wrapping_add(k * 7919)) as usize) % dim;
+            // Sign alternation based on hash bits
+            let sign = if (hash >> (k % 64)) & 1 == 0 { 1.0 } else { -1.0 };
+            embedding[idx] += sign * 0.25;
+        }
+    }
+    
+    // L2 normalize
+    let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 1e-6 {
+        for val in embedding.iter_mut() {
+            *val /= norm;
+        }
+    }
+    
+    embedding
 }

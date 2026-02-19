@@ -119,6 +119,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     // Channels for Audio
     let (tx_audio_text, rx_audio_text) = mpsc::channel::<String>();
     let (tx_spectrum, rx_spectrum) = mpsc::channel::<AudioSpectrum>();
+    let (tx_word_embedding, rx_word_embedding) = mpsc::channel::<Vec<f32>>();
     
     // WebSocket Audio channel (browser mic → backend ears)
     let (ws_audio_tx, ws_audio_rx) = mpsc::channel::<Vec<f32>>();
@@ -148,7 +149,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     
     // Spawn Audio Listener with detected mode
     let _ears = ears::AudioListener::new(
-        tx_thoughts.clone(), tx_audio_text, tx_spectrum,
+        tx_thoughts.clone(), tx_audio_text, tx_spectrum, tx_word_embedding,
         sensory_mode, 
         if needs_ws_audio { Some(ws_audio_rx) } else { None }
     ).expect("Failed to spawn Ears");
@@ -704,6 +705,16 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                 }
             }
 
+            // === WORD EMBEDDING PATHWAY (Phase 2: Wernicke's Area) ===
+            // Whisper text → hash embedding → Semantic region
+            // Latency: ~50-200ms (Whisper inference time)
+            // This is SLOWER than raw FFT (~5ms) but FASTER than full LLM (~500-2000ms)
+            while let Ok(word_vec) = rx_word_embedding.try_recv() {
+                ego.inject_embedding(&word_vec, crate::core::reservoir::NeuronRegion::Semantic);
+                let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
+                    format!("🧠 WORD EMBED → Semantic ({} dims)", word_vec.len())));
+            }
+
             let mut chem = chemistry.lock().unwrap();
             
             // SENSE: CHRONORECEPTION (Circadian Perception)
@@ -1166,8 +1177,10 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
             if let Some(ref tx) = tx_cortex {
                 // SATELLITE INPUT FILTER (Membrane Hardening)
                 // Attention = Capability to focus. High Adenosine = Low Attention.
-                // Attention (0-1) = 1.0 - Adenosine.
-                let attention = (1.0 - chem.adenosine).max(0.0);
+                // Attention (0-1) = Combination of Alertness (1-Adenosine) and Interest (Dopamine)
+                // Fix: Previous logic was only (1.0 - Adenosine), causing "deafness" when tired.
+                // Now, Dopamine boosts attention.
+                let attention = ((1.0 - chem.adenosine) * 0.5 + chem.dopamine * 0.8).clamp(0.2, 1.0);
                 
                 // If the Membrane rejects the input (Hardening), we don't think about it.
                 // UPDATED: Now returns (Option<String>, f32) where f32 is "Ontological Error Severity".
