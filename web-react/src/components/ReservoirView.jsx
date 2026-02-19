@@ -16,62 +16,6 @@ function mulberry32(a) {
     }
 }
 
-// NEOCORTEX (Reservoir / Echo State Network) — 2500 neurons
-function generateNeocortex() {
-    const totalNeurons = MAX_NEURONS;
-    const positions = new Float32Array(totalNeurons * 3);
-    const initialColors = new Float32Array(totalNeurons * 3);
-    const sizes = new Float32Array(totalNeurons);
-
-    const rng = mulberry32(1337);
-    const vec3s = []; 
-
-    for (let i = 0; i < totalNeurons; i++) {
-        const u = rng();
-        const v = rng();
-        const theta = 2 * Math.PI * u;
-        const phi = Math.acos(2 * v - 1);
-        
-        let r = BRAIN_RADIUS;
-
-        // Split Hemispheres
-        const x_raw = r * Math.sin(phi) * Math.cos(theta);
-        let x_mod = x_raw;
-        if (Math.abs(x_raw) < 2.0) x_mod += (x_raw > 0 ? 3.0 : -3.0);
-
-        // Cortical Folding (Noise based on spherical harmonics)
-        const noise = Math.sin(phi * 12) * Math.cos(theta * 10) * 1.5;
-        r += noise;
-
-        // Shape: Tapered Front
-        let z = r * Math.sin(phi) * Math.sin(theta);
-        let y = r * Math.cos(phi);
-        
-        // Flatten bottom
-        if (y < -15) y *= 0.8;
-        
-        // Elongate Z (Front/Back)
-        z *= 1.2;
-
-        const stretchX = 0.9; 
-        let x = x_mod * stretchX;
-
-        positions[i * 3] = x;
-        positions[i * 3 + 1] = y;
-        positions[i * 3 + 2] = z;
-        
-        vec3s.push(new THREE.Vector3(x, y, z));
-
-        // Default: Dark (invisible until data drives them)
-        initialColors[i * 3] = 0.02;     
-        initialColors[i * 3 + 1] = 0.04; 
-        initialColors[i * 3 + 2] = 0.06; 
-
-        sizes[i] = 0.5 + rng() * 1.0;
-    }
-
-    return { positions, vec3s, initialColors, sizes };
-}
 
 // FRONTAL LOBE (LLM Embeddings / Planet) — 512 concepts
 function generateFrontalLobe() {
@@ -335,7 +279,7 @@ function InjectFlow({ neuronPositions, frontVecs, size, activations, regionMap }
 
 // AUDITORY FLOW — Audio Spectrogram → Auditory Cortex
 // Uses REAL backend positions for neuron endpoints
-function AuditoryFlow({ neuronPositions, embedding, regionMap, size }) {
+function AuditoryFlow({ neuronPositions, embedding, regionMap }) {
     const lineRef = useRef();
 
     const { geometry } = useMemo(() => {
@@ -376,15 +320,16 @@ function AuditoryFlow({ neuronPositions, embedding, regionMap, size }) {
 
             // Find target auditory neuron for this band
             let targetIdx = -1;
+            const nCount = neuronPositions.length;
             if (regionMap && regionMap.length > 0) {
-                let start = (b * 5) % size;
-                for(let k=0; k<size; k++) {
-                    let idx = (start + k) % size;
+                let start = (b * 5) % nCount;
+                for(let k=0; k<nCount; k++) {
+                    let idx = (start + k) % nCount;
                     if (regionMap[idx] === 1) { targetIdx = idx; break; }
                 }
             }
             if (targetIdx === -1) {
-                targetIdx = (b * 13) % size;
+                targetIdx = (b * 13) % nCount;
             }
 
             if (targetIdx >= neuronPositions.length) continue;
@@ -418,7 +363,7 @@ function AuditoryFlow({ neuronPositions, embedding, regionMap, size }) {
 // HEBBIAN WEB — Intra-reservoir connections
 // Uses REAL backend positions for both endpoints
 // Pairs are generated based on spatial proximity (small-world topology)
-function HebbianWeb({ neuronPositions, activity, size, regionMap }) {
+function HebbianWeb({ neuronPositions, activity, regionMap }) {
     const lineRef = useRef();
     
     const { geometry } = useMemo(() => {
@@ -622,14 +567,12 @@ function BrainScene({ reservoirActivity, activations, size, telemetry }) {
                 neuronPositions={neuronPositions}
                 embedding={telemetry?.audio_spectrum?.frequency_embedding}
                 regionMap={regionMap}
-                size={size}
             />
 
             {/* 3b. HEBBIAN WEB — Intra-reservoir connections */}
             <HebbianWeb
                 neuronPositions={neuronPositions}
                 activity={reservoirActivity}
-                size={size}
                 regionMap={regionMap}
             />
 
