@@ -79,6 +79,7 @@ pub fn run() -> Result<()> {
         activations: Vec::new(),
         region_map: Vec::new(),
         reservoir_size: 500,
+        neuron_positions: Vec::new(),
     };
     
     // Input Buffer
@@ -135,6 +136,7 @@ pub fn run() -> Result<()> {
                                             activations: Vec::new(),
                                             region_map: Vec::new(),
                                             reservoir_size: 500,
+                                            neuron_positions: Vec::new(),
                                         };
                                     }
                                 }
