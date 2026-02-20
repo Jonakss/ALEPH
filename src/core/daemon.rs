@@ -81,7 +81,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     // --- 2. START THE LOOP ---
     // Track last active interaction to trigger Spontaneous Thought
     let mut last_interaction_tick: u64 = 0; 
-    let mut ticks: u64 = 0;
+    let mut _ticks: u64 = 0;
     // --- 0. GENOME (The Seed) ---
     let mut seed = Genome::load()?;
     let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
