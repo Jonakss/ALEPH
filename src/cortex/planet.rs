@@ -497,10 +497,10 @@ impl Planet {
             
             if let Ok(fragment) = self.tokenizer.decode(&pending_chk, false) {
                   // STOP SEQUENCE DETECTION
-                  let stop_sequences = [
-                      "<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve", "</s>",
-                      "System:", "Instructions:", "You are", "Qualia:", "Context:", "Response:"
-                  ];
+                  // User Feedback: Don't cut off the flow! Allow hallucinations.
+                  // Only stop on structural breaks that would confuse the prompt loop.
+                  let stop_sequences = ["<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve", "</s>"];
+                  // Removed: "System:", "Instructions:", "You are", "Qualia:", "Context:", "Response:"
                   let mut should_stop = false;
                   for stop in stop_sequences {
                       if fragment.contains(stop) {

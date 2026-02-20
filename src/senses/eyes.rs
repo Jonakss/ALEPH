@@ -58,43 +58,49 @@ impl Eyes {
                                 }
                                 
                                 // 2. Calculate Motion (Frame Diff) + Embedding
-                                let embedding_size = 64;
-                                let mut embedding = vec![0.0; embedding_size];
+                                // We want a 64x64 Grid (4096 points) for both Embedding and Visualization
+                                let grid_w = 64;
+                                let grid_size = grid_w * grid_w;
+                                let mut visual_grid = vec![0.0; grid_size];
                                 
                                 if let Some(last) = &last_frame_gray {
                                     if last.len() == gray.len() {
-                                        let chunk_size = gray.len() / embedding_size;
+                                        // Map 320x240 -> 64x64
+                                        let step_x = width as usize / grid_w;
+                                        let step_y = height as usize / grid_w;
                                         
-                                        for i in 0..embedding_size {
-                                            let start = i * chunk_size;
-                                            let end = (start + chunk_size).min(gray.len());
-                                            let mut diff_sum = 0.0;
-                                            let mut bright_sum = 0.0;
-                                            
-                                            for j in start..end {
-                                                let diff = (gray[j] as i16 - last[j] as i16).abs() as f32;
-                                                diff_sum += diff;
-                                                bright_sum += gray[j] as f32;
+                                        for y in 0..grid_w {
+                                            for x in 0..grid_w {
+                                                // Sample center pixel of the block (fastest)
+                                                // Averaging would be better but slower
+                                                let src_x = x * step_x;
+                                                let src_y = y * step_y;
+                                                let idx = src_y * width as usize + src_x;
+                                                
+                                                if idx < gray.len() {
+                                                    let val = gray[idx];
+                                                    let last_val = last[idx];
+                                                    
+                                                    let diff = (val as i16 - last_val as i16).abs() as f32;
+                                                    let bright = val as f32;
+                                                    
+                                                    // Combined signal: Motion (High) + Brightness (Low baseline)
+                                                    let signal = (diff / 30.0) + (bright / 255.0 * 0.1);
+                                                    visual_grid[y * grid_w + x] = signal.min(1.0);
+                                                }
                                             }
-                                            
-                                            // Normalize
-                                            let count = (end - start) as f32;
-                                            let avg_diff = diff_sum / count; // 0..255
-                                            let avg_bright = bright_sum / count; // 0..255
-                                            
-                                            // Embedding = Brightness modulated by Motion
-                                            // High motion = High value. Static = Low value.
-                                            // Also encode brightness as a baseline.
-                                            let combined = (avg_diff / 20.0) + (avg_bright / 255.0 * 0.2); 
-                                            embedding[i] = combined.tanh(); // Normalize -1..1 (approx)
                                         }
                                     }
                                 }
                                 
                                 last_frame_gray = Some(gray);
                                 
-                                // Send
-                                if let Err(_) = tx.send(embedding) {
+                                // Send Grid (Daemon will downsample for embedding if needed, or we use grid as embedding)
+                                // Current Reservoir expects 64-float embedding?
+                                // Let's send the FULL 4096 grid. The Reservoir can sample it or we project it.
+                                // Wait, the channel is Sender<Vec<f32>>.
+                                // We should send the full grid.
+                                if let Err(_) = tx.send(visual_grid) {
                                     break;
                                 }
                             },

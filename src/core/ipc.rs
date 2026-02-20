@@ -30,6 +30,7 @@ pub enum AlephPacket {
         activations: Vec<f32>,
         region_map: Vec<u8>,
         reservoir_size: usize,
+        visual_cortex: Vec<f32>, // 64x64 Grid from Eyes
         
         // Spatial Topology (Real backend positions)
         neuron_positions: Vec<[f32; 3]>,
