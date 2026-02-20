@@ -684,14 +684,21 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
             }
             
             // Audio Physics (Spectrum Update)
-            let mut audio_energy = 0.0;
+            // 0. SENSORY INPUT (Non-Blocking)
+            // Drain the audio buffer to prevent lag/latency accumulation.
+            let mut audio_energy = 0.0; // Initialize here, will be updated by the last packet in the loop
             while let Ok(spec) = rx_spectrum.try_recv() {
-                last_spectrum = spec.clone();
+                // Update UI state (only last packet needed for viz, but we process all for physics)
+                // Optimization: Only update lock on last packet? 
+                // For now, simple update.
+
                 // Sum energy for chemical impact
-                audio_energy = last_spectrum.bass + last_spectrum.mids + last_spectrum.highs;
-                
+                audio_energy = spec.bass + spec.mids + spec.highs; // Use current `spec` for energy
+                last_spectrum = spec.clone(); // Update last_spectrum for web_state and other uses
+
                 // CRITICAL: Immediate Update for UI Visualization
-                if ticks % 2 == 0 { // 30Hz visual update for smoothness
+                // We can skip lock if we aren't at the right tick, but let's keep it robust.
+                if ticks % 2 == 0 { 
                     if let Ok(mut state) = web_state.lock() {
                         state.audio_spectrum = spec.clone();
                     }
@@ -702,43 +709,44 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                 if !spec.frequency_embedding.is_empty() {
                     ego.inject_embedding(&spec.frequency_embedding, crate::core::reservoir::NeuronRegion::Auditory);
                 }
-
-                // 2. VISUAL SENSATION (Phase 7 - Occipital Lobe)
-                // Now receiving 64x64 Grid (4096 floats)
-                if let Ok(visual_grid) = rx_vision.try_recv() {
-                     // 1. Update Web State for Visualization
-                     if ticks % 4 == 0 { // ~15Hz update for UI
-                        if let Ok(mut state) = web_state.lock() {
-                            state.visual_cortex = visual_grid.clone();
-                        }
-                     }
-
-                     // 2. Downsample for Reservoir Embedding (4096 -> 64)
-                     // Simple strided sampling: take every 64th value
-                     // Better: Average pooling? Let's do strided for speed first.
-                     let mut embedding = Vec::with_capacity(64);
-                     let stride = visual_grid.len() / 64;
-                     for i in 0..64 {
-                         if let Some(val) = visual_grid.get(i * stride) {
-                             embedding.push(*val);
-                         } else {
-                             embedding.push(0.0);
-                         }
-                     }
-                     
-                     ego.inject_embedding(&embedding, crate::core::reservoir::NeuronRegion::Visual);
-                }
-
+                
                 // STARTLE REFLEX (Cortisol)
+                // Check intensity of THIS packet
                 let intensity = spec.bass.max(spec.mids);
-                if intensity > 0.5 { // Was 0.6
+                if intensity > 0.5 { // Threshold lowered (Was 0.6)
                     let mut chem = chemistry.lock().unwrap();
                     chem.cortisol += intensity * 0.05; 
-                    if intensity > 0.8 { // Was 0.95
+                    if intensity > 0.8 { // Threshold lowered (Was 0.95)
                         chem.cortisol += 0.2;
-                             let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💥 AUDITORY SHOCK!".to_string()));
+                         let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💥 AUDITORY SHOCK!".to_string()));
                     }
                 }
+            }
+
+            // 2. VISUAL SENSATION (Phase 7 - Occipital Lobe)
+            // Now receiving 64x64 Grid (4096 floats)
+            if let Ok(visual_grid) = rx_vision.try_recv() {
+                 // 1. Update Web State for Visualization
+                 if ticks % 4 == 0 { // ~15Hz update for UI
+                    if let Ok(mut state) = web_state.lock() {
+                        state.visual_cortex = visual_grid.clone();
+                    }
+                 }
+
+                 // 2. Downsample for Reservoir Embedding (4096 -> 64)
+                 // Simple strided sampling: take every 64th value
+                 // Better: Average pooling? Let's do strided for speed first.
+                 let mut embedding = Vec::with_capacity(64);
+                 let stride = visual_grid.len() / 64;
+                 for i in 0..64 {
+                     if let Some(val) = visual_grid.get(i * stride) {
+                         embedding.push(*val);
+                     } else {
+                         embedding.push(0.0);
+                     }
+                 }
+                 
+                 ego.inject_embedding(&embedding, crate::core::reservoir::NeuronRegion::Visual);
             }
 
             // === WORD EMBEDDING PATHWAY (Phase 2: Wernicke's Area) ===
