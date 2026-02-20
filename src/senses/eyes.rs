@@ -28,7 +28,7 @@ impl Eyes {
             
             // Attempt to open camera 0
             let index = CameraIndex::Index(0);
-            let requested = RequestedFormat::new(RequestedFormatType::AbsoluteHighestFrameRate);
+            let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
             
             match Camera::new(index, requested) {
                 Ok(mut camera) => {
