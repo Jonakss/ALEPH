@@ -9,6 +9,7 @@ pub struct MemoryOutput {
     pub input_text: String,
     pub novelty: f32, // 0.0 - 1.0 (1.0 = New)
     pub retrieval: Option<(String, f32)>, // (Context, Relevance)
+    pub embedding: Option<Vec<f32>>, // NEW: Physical Engram
     pub _volatile_count: usize,
     pub _total_count: usize,
 }
@@ -57,16 +58,33 @@ impl Hippocampus {
                     },
                     MemoryCommand::ConsolidateSleep => {
                         match hippo.store.consolidate_memories() {
-                            Ok(forgotten) => {
-                                let _ = log_tx.send(format!("💤 Sleep Cycle: Consolidated. Pruned {} weak memories.", forgotten));
+                            Ok((forgotten, dreams)) => {
+                                let _ = log_tx.send(format!("💤 Sleep Cycle: Consolidated. Pruned {} weak memories. Replaying {} dreams.", forgotten, dreams.len()));
+                                
                                 // EVENT: Trigger structural growth
                                 let _ = out_tx.send(MemoryOutput {
                                     input_text: "CONSOLIDATION_EVENT".to_string(),
                                     novelty: 1.0, // High novelty to signify importance
                                     retrieval: None,
+                                    embedding: None, 
                                     _volatile_count: 0,
                                     _total_count: hippo.store.memory_count(),
                                 });
+
+                                // DREAM REPLAY: Inject high-entropy memories back into the system
+                                for (text, embedding) in dreams {
+                                     // Small delay? No, storm is better.
+                                     let _ = out_tx.send(MemoryOutput {
+                                         input_text: format!("DREAM_REPLAY: {}", text),
+                                         novelty: 0.9,
+                                         retrieval: None,
+                                         embedding: Some(embedding),
+                                         _volatile_count: 0,
+                                         _total_count: hippo.store.memory_count(),
+                                     });
+                                     // Tiny sleep to avoid blocking channel?
+                                     std::thread::sleep(std::time::Duration::from_millis(50));
+                                }
                             },
                             Err(e) => { let _ = log_tx.send(format!("Sleep Error: {}", e)); }
                         }
@@ -138,12 +156,14 @@ impl Hippocampus {
 
         // 4. Store (Short Term Memory)
         // Manual add to avoid re-embedding
-        self.store.add_precalculated(text.clone(), vector, vec!["input".to_string()], entropy)?;
+        self.store.add_precalculated(text.clone(), vector.clone(), vec!["input".to_string()], entropy)?;
 
+        // Return the embedding so the Daemon can inject it physically
         Ok(MemoryOutput {
             input_text: text,
             novelty,
             retrieval,
+            embedding: Some(vector), // Pass the vector up!
             _volatile_count: self.store.volatile_count(),
             _total_count: self.store.memory_count(),
         })

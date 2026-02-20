@@ -108,6 +108,10 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     
     // --- 1.5 THE SATELLITE (Observer) ---
     let satellite = Satellite::new(seed.paranoia, seed.refractive_index); 
+
+    // --- 1.6 AGENCY (Goal System) ---
+    let mut agent = crate::core::agency::Agency::new();
+    let mut interaction_count: u64 = 0; // Track successful interactions
     let mut gate = ExpressionGate::new();
     
     // Hardware Proprioception
@@ -155,7 +159,10 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
     ).expect("Failed to spawn Ears");
     let mut last_spectrum = AudioSpectrum::default();
 
-    // Graceful Shutdown Handler
+    let (tx_vision, rx_vision) = mpsc::channel::<Vec<f32>>();
+    let _eyes = crate::senses::eyes::Eyes::new(tx_vision);
+    _eyes.run();
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
@@ -693,6 +700,11 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                     ego.inject_embedding(&spec.frequency_embedding, crate::core::reservoir::NeuronRegion::Auditory);
                 }
 
+                // 2. VISUAL SENSATION (Phase 7 - Occipital Lobe)
+                if let Ok(visual_vec) = rx_vision.try_recv() {
+                     ego.inject_embedding(&visual_vec, crate::core::reservoir::NeuronRegion::Visual);
+                }
+
                 // STARTLE REFLEX (Cortisol)
                 let intensity = spec.bass.max(spec.mids);
                 if intensity > 0.6 {
@@ -929,6 +941,20 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                      _ => {}
                  }
             }
+
+            // AGENCY EVALUATION (Phase 8)
+            // Reward for: Interactions (speaking) and Neurogenesis (learning)
+            let memory_metric = ego.hebbian_events as usize; // Approximation of learning
+            let reward = agent.evaluate(interaction_count, memory_metric);
+            
+            if reward > 0.0 {
+                chem.dopamine = (chem.dopamine + reward).min(1.0);
+                let _ = tx_thoughts.send(Thought::new(MindVoice::System, format!("🏆 GOAL ACHIEVED: Dopamine +{:.2}", reward)));
+                // Epiphany trigger?
+                if reward >= 0.5 {
+                    ego.trigger_epiphany(chem.dopamine);
+                }
+            }
             
             // VARIABLE METABOLISM: Calculate Target Hz
             // Formula: Base + (Dopamine * 60) - (Adenosine * 40)
@@ -1153,6 +1179,13 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
 
         // 1. MEMORY & RESERVOIR FEEDBACK
         if let Ok(mem_out) = rx_mem_out.try_recv() {
+            // PHASE 6: ENGRAM INJECTION
+            // If the memory came with an embedding, inject it into the Association Cortex.
+            // This makes memories PHYSICALLY visible as blue/purple pulses.
+            if let Some(embedding) = &mem_out.embedding {
+                ego.inject_embedding(embedding, crate::core::reservoir::NeuronRegion::Association);
+            }
+
             let mut chem = chemistry.lock().unwrap();
 
             // Update Stats
@@ -1306,6 +1339,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                         
                         if should_vocalize {
                             // EMIT VOCAL THOUGHT (Resonance)
+                            interaction_count += 1;
                             let _ = tx_thoughts.send(Thought::new(MindVoice::Vocal, final_text.clone()));
                             
                             // Feed back to Memory (We spoke it, so we remember it)

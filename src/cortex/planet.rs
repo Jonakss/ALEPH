@@ -268,7 +268,10 @@ impl Planet {
         // No labels. No instructions. Just the flow of experience.
         let injection = if !input.is_empty() {
              // Thoughts/Inputs flow into the stream
-             format!("{}\n{}\n\n{}\n", mem_str, chem.bio_context, input)
+             // Fix: Ensure we end with a clear newline so the LLM knows it's a new turn.
+             // Also prefix with a prompt marker to distinguish external input?
+             // YES: User request "No telepathy". Frame it as HEARING.
+             format!("{}\n{}\n\n[HEARING] {}\n\n", mem_str, chem.bio_context, input)
         } else {
              // Passive existence 
              format!("{}\n{}\n", mem_str, chem.bio_context)
@@ -494,7 +497,10 @@ impl Planet {
             
             if let Ok(fragment) = self.tokenizer.decode(&pending_chk, false) {
                   // STOP SEQUENCE DETECTION
-                  let stop_sequences = ["<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve", "</s>"];
+                  let stop_sequences = [
+                      "<|", "USER:", "EVENTO:", "A:", "D:", "C:", "[", "COLMENA", "Respuestabreve", "</s>",
+                      "System:", "Instructions:", "You are", "Qualia:", "Context:", "Response:"
+                  ];
                   let mut should_stop = false;
                   for stop in stop_sequences {
                       if fragment.contains(stop) {

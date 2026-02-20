@@ -5,8 +5,10 @@ edition = "2021"
 
 [dependencies]
 # --- MATEMÁTICA DEL CAOS (SISTEMA 1) ---
-nalgebra = { version = "0.32", features = ["serde-serialize"] }  # Álgebra lineal optimizada
-rand = "0.9"       # Generador de caos (Latest)
+nalgebra = { version = "0.32", features = [
+    "serde-serialize",
+] } # Álgebra lineal optimizada
+rand = "0.9" # Generador de caos (Latest)
 rand_distr = "0.5" # Distribuciones gaussianas (Latest)
 
 # --- IA GENERATIVA (SISTEMA 2) ---
@@ -29,12 +31,18 @@ device_query = "2.1.0"                         # Tacto (Input Detection)
 whisper-rs = { version = "0.13.0" }            # STT Inference (Binding C++)
 chrono = "0.4"                                 # Chronoreception (Time Sense)
 # cpal already included above
-rubato = "0.14"                                    # Audio Resampling (48k -> 16k)
+rubato = "0.14"                                       # Audio Resampling (48k -> 16k)
 gag = "1.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ctrlc = "3.5.1"
-tungstenite = "0.24"                               # WebSocket for Web Dashboard
-sha1 = "0.10"                                      # WebSocket handshake
-base64 = "0.22"                                    # WebSocket handshake
+tungstenite = "0.24"                                  # WebSocket for Web Dashboard
+sha1 = "0.10"                                         # WebSocket handshake
+base64 = "0.22"                                       # WebSocket handshake
 symphonia = { version = "0.5.5", features = ["all"] }
+
+# --- VISION (SISTEMA VISUAL - Phase 9) ---
+nokhwa = { version = "0.10.4", features = [
+    "input-v4l",
+] } # Webcam access (Linux V4L2)
+image = "0.24" # Image processing

@@ -175,16 +175,29 @@ impl VectorStore {
     }
 
     /// Sueño: Poda memorias irrelevantes y guarda en disco las importantes
-    pub fn consolidate_memories(&mut self) -> Result<usize> {
+    /// Returns: (pruned_count, dreams_to_replay)
+    pub fn consolidate_memories(&mut self) -> Result<(usize, Vec<(String, Vec<f32>)>)> {
         let initial_count = self.memories.len();
-        
+        let mut dreams = Vec::new(); // Dreams to replay (High Entropy)
+
         // Criterio de Consolidación: Entropía > 0.7 OR Reciente (< 1 min)? No, Sleep Cycle clears day.
         // User rule: "Solo los recuerdos asociados a estados de alta intensidad (Entropía > 0.7) se guardarán"
         
-        // Criterio: Entropía > 0.7 (Alta intensidad)
+        // Criterio: Entropía > 0.7 (Alta intensidad) OR Identity-related
         self.memories.retain(|m| {
-            if m.entropy > 0.7 {
-                true // Keep (will be saved)
+            let is_identity = m.text.to_lowercase().contains("name") 
+                           || m.text.to_lowercase().contains("call me")
+                           || m.text.to_lowercase().contains("who am i")
+                           || m.text.to_lowercase().contains("identity")
+                           || m.text.to_lowercase().contains("aleph");
+
+            if m.entropy > 0.7 || is_identity {
+                 // Keep (will be saved)
+                 // Dream Replay: Only SUPER INTENSE memories (0.85+) or randomly some 0.7+
+                 if m.entropy > 0.85 {
+                     dreams.push((m.text.clone(), m.embedding.clone()));
+                 }
+                 true
             } else {
                 false // Prune (Forget weak memories)
             }
@@ -198,7 +211,7 @@ impl VectorStore {
         let final_count = self.memories.len();
         self.save_to_disk()?; 
         
-        Ok(initial_count - final_count) // Retorna cuantos olvidó
+        Ok((initial_count - final_count, dreams)) 
     }
 
     pub fn volatile_count(&self) -> usize {

@@ -137,6 +137,8 @@ function Connectome({ activity, regionMap, neuronPositions }) {
                 if (rId === 0) { r=1.0; g=0.8; b=0.1; } // Semantic (Gold)
                 else if (rId === 1) { r=0.1; g=1.0; b=0.2; } // Auditory (Green)
                 else if (rId === 2) { r=0.6; g=0.0; b=1.0; } // Limbic (Purple)
+                else if (rId === 3) { r=0.1; g=0.4; b=1.0; } // Association (Electric Blue)
+                else if (rId === 4) { r=1.0; g=0.2; b=0.0; } // Visual (Red/Orange)
                 
                 const intensity = Math.max(0, val);
                 const flash = intensity * intensity * 0.5;

@@ -13,7 +13,8 @@ pub enum NeuronRegion {
     Semantic,    // Responds most to LLM logits (inject_logits pathway)
     Auditory,    // Responds most to audio input
     Limbic,      // Responds most to chemical modulation
-    Association, // No strong preference — connects regions
+    Association, // Parietal (High-level Memory/Context) - Blue/Purple
+    Visual,      // Occipital Lobe (Vision) - Red/Orange
 }
 
 impl NeuronRegion {
@@ -23,6 +24,7 @@ impl NeuronRegion {
             NeuronRegion::Auditory => 1,
             NeuronRegion::Limbic => 2,
             NeuronRegion::Association => 3,
+            NeuronRegion::Visual => 4,
         }
     }
 }
@@ -44,6 +46,8 @@ pub struct FractalReservoir {
     semantic_exposure: Vec<f32>,   // Accumulated activation from LLM logits
     auditory_exposure: Vec<f32>,   // Accumulated activation from audio
     limbic_exposure: Vec<f32>,     // Accumulated activation from chemistry
+    association_exposure: Vec<f32>, // Accumulated activation from memory engrams (Phase 6)
+    visual_exposure: Vec<f32>,      // Accumulated activation from visual input (Phase 7)
 
     /// SPATIAL TOPOLOGY (Phase 1: Fractal Brain)
     /// Each neuron has a physical position in 3D space.
@@ -127,6 +131,8 @@ impl FractalReservoir {
             semantic_exposure: vec![0.0; size],
             auditory_exposure: vec![0.0; size],
             limbic_exposure: vec![0.0; size],
+            association_exposure: vec![0.0; size],
+            visual_exposure: vec![0.0; size],
             positions,
             weights,
             input_weights,
@@ -161,6 +167,16 @@ impl FractalReservoir {
                                 r * phi.cos(),
                             ]);
                         }
+                    }
+
+                    // Phase 6: Association Exposure (Backwards Compat)
+                    if loaded.association_exposure.len() != loaded.size {
+                        loaded.association_exposure = vec![0.0; loaded.size];
+                    }
+
+                    // Phase 7: Visual Exposure (Backwards Compat)
+                    if loaded.visual_exposure.len() != loaded.size {
+                        loaded.visual_exposure = vec![0.0; loaded.size];
                     }
                     
                     return loaded;
@@ -313,7 +329,8 @@ impl FractalReservoir {
                 NeuronRegion::Auditory => pos[0].abs() > 25.0, // Lateral Temporal Lobes (Sides)
                 NeuronRegion::Semantic => pos[2] > 20.0,       // Frontal Lobe (Front)
                 NeuronRegion::Limbic => pos[1] < -20.0,        // Deep/Basal Ganglia (Bottom)
-                _ => true, // Association areas receive everything else
+                NeuronRegion::Association => pos[1] > 20.0 && pos[2] < 10.0, // Parietal (Top/Rear)
+                NeuronRegion::Visual => pos[2] < -25.0,        // Occipital (Back)
             };
 
             if is_in_receptive_field {
@@ -341,7 +358,16 @@ impl FractalReservoir {
                                 self.limbic_exposure[i] += activation * stimulus_strength * 0.05;
                             }
                         },
-                        _ => {}
+                        NeuronRegion::Association => {
+                            if i < self.association_exposure.len() {
+                                self.association_exposure[i] += activation * stimulus_strength * 0.05;
+                            }
+                        },
+                        NeuronRegion::Visual => {
+                            if i < self.visual_exposure.len() {
+                                self.visual_exposure[i] += activation * stimulus_strength * 0.05;
+                            }
+                        },
                     }
                 }
             }
@@ -587,8 +613,10 @@ impl FractalReservoir {
             self.size = new_size;
             
             // New neuron starts with 0 exposure — will specialize through use
+            self.semantic_exposure.push(0.0);
             self.auditory_exposure.push(0.0);
             self.limbic_exposure.push(0.0);
+            self.association_exposure.push(0.0);
             self.last_activity.push(0.0);
         }
     }
@@ -639,18 +667,24 @@ impl FractalReservoir {
             let sem = if i < self.semantic_exposure.len() { self.semantic_exposure[i] } else { 0.0 };
             let aud = if i < self.auditory_exposure.len() { self.auditory_exposure[i] } else { 0.0 };
             let lim = if i < self.limbic_exposure.len() { self.limbic_exposure[i] } else { 0.0 };
+            let assoc = if i < self.association_exposure.len() { self.association_exposure[i] } else { 0.0 };
+            let vis = if i < self.visual_exposure.len() { self.visual_exposure[i] } else { 0.0 };
             
-            let max_val = sem.max(aud).max(lim);
+            let max_val = sem.max(aud).max(lim).max(assoc).max(vis);
             let threshold = 0.1; // Need meaningful exposure to specialize
             
             if max_val < threshold {
-                NeuronRegion::Association.as_id() // Not specialized yet
-            } else if sem >= aud && sem >= lim {
+                NeuronRegion::Association.as_id() // Not specialized yet (or Association by default)
+            } else if sem >= aud && sem >= lim && sem >= assoc && sem >= vis {
                 NeuronRegion::Semantic.as_id()
-            } else if aud >= sem && aud >= lim {
+            } else if aud >= sem && aud >= lim && aud >= assoc && aud >= vis {
                 NeuronRegion::Auditory.as_id()
-            } else {
+            } else if lim >= sem && lim >= aud && lim >= assoc && lim >= vis {
                 NeuronRegion::Limbic.as_id()
+            } else if assoc >= sem && assoc >= aud && assoc >= lim && assoc >= vis {
+                NeuronRegion::Association.as_id()
+            } else {
+                NeuronRegion::Visual.as_id()
             }
         }).collect()
     }
@@ -661,8 +695,9 @@ impl FractalReservoir {
         let auditory_count = region_map.iter().filter(|&&r| r == 1).count();
         let limbic_count = region_map.iter().filter(|&&r| r == 2).count();
         let assoc_count = region_map.iter().filter(|&&r| r == 3).count();
-        format!("S:{} A:{} L:{} X:{} | H:{:.2}", 
-            semantic_count, auditory_count, limbic_count, assoc_count, self.entropy)
+        let visual_count = region_map.iter().filter(|&&r| r == 4).count();
+        format!("S:{} A:{} L:{} X:{} V:{} | H:{:.2}", 
+            semantic_count, auditory_count, limbic_count, assoc_count, visual_count, self.entropy)
     }
 
     pub fn save(&self) {
