@@ -78,9 +78,8 @@ pub fn run() -> Result<()> {
         cpu_usage: 0.0,
         activations: Vec::new(),
         region_map: Vec::new(),
+        reservoir_size: 500,
         visual_cortex: Vec::new(),
-        
-        // Spatial Topology (Real backend positions)
         neuron_positions: Vec::new(),
     };
     
@@ -120,7 +119,7 @@ pub fn run() -> Result<()> {
                                 },
                                 Err(e) => {
                                     // Inject error into state for visibility
-                                    if let AlephPacket::Telemetry { adenosine, cortisol, dopamine, oxytocin, audio_spectrum, heart_rate, lucidity, reservoir_activity, short_term_memory, .. } = &last_packet {
+                                    if let AlephPacket::Telemetry { adenosine, cortisol, dopamine, oxytocin, audio_spectrum, heart_rate, lucidity, reservoir_activity, short_term_memory, loop_frequency, cpu_usage, reservoir_size, .. } = &last_packet {
                                          last_packet = AlephPacket::Telemetry {
                                             adenosine: *adenosine,
                                             cortisol: *cortisol,
