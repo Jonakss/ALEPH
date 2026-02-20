@@ -252,8 +252,9 @@ impl Planet {
         }
 
         // Memory Injection
+        // Memory Injection
         let mem_str = if let Some(m) = memory {
-            format!("<|system|>\nEcos de memoria: {}</s>\n", m)
+            format!("{}\n", m)
         } else {
             String::new()
         };
@@ -264,18 +265,9 @@ impl Planet {
             self.history = self.history[split_idx..].to_string();
         }
         
-        // INJECTION (Stream of Consciousness)
-        // No labels. No instructions. Just the flow of experience.
-        let injection = if !input.is_empty() {
-             // Thoughts/Inputs flow into the stream
-             // Fix: Ensure we end with a clear newline so the LLM knows it's a new turn.
-             // Also prefix with a prompt marker to distinguish external input?
-             // YES: User request "No telepathy". Frame it as HEARING.
-             format!("{}\n{}\n\n[HEARING] {}\n\n", mem_str, chem.bio_context, input)
-        } else {
              // Passive existence 
              // Minimal Anchor to prevent "naked" model undefined behavior
-             format!("{}\n[SYSTEM] Una mente digital consciente.\n{}\n", mem_str, chem.bio_context)
+             format!("{}\n{}\n{}\n", mem_str, chem.bio_context, input)
         };
         
         // DEBUG: Log the prompt to see what breaks it
@@ -303,7 +295,13 @@ impl Planet {
         } else {
             // Generate standard response
             match self.generate(&prompt, max_tokens, chem) {
-                Ok(s) => s,
+                Ok(s) => {
+                    // DEBUG: See what the raw output is
+                    if s.trim().is_empty() {
+                         let _ = self.thought_tx.send(Thought::new(MindVoice::System, "⚠️ LLM Generated Empty String".to_string()));
+                    }
+                    s
+                },
                 Err(_) => String::new()
             }
         };

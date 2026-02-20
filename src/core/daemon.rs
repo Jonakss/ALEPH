@@ -731,10 +731,10 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
 
                 // STARTLE REFLEX (Cortisol)
                 let intensity = spec.bass.max(spec.mids);
-                if intensity > 0.6 {
+                if intensity > 0.5 { // Was 0.6
                     let mut chem = chemistry.lock().unwrap();
                     chem.cortisol += intensity * 0.05; 
-                    if intensity > 0.95 {
+                    if intensity > 0.8 { // Was 0.95
                         chem.cortisol += 0.2;
                              let _ = tx_thoughts.send(Thought::new(MindVoice::System, "💥 AUDITORY SHOCK!".to_string()));
                     }
@@ -1252,7 +1252,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
 
                 if let Some(filtered_text) = filtered_result {
                     
-                    let bio_desc = format!("{}. Fatiga: {:.0}%", 
+                    let bio_desc = format!("Soy Aleph. Estado: {}. Fatiga: {:.0}%.", 
                         ego.get_state_description(), 
                         chem.get_cognitive_impairment() * 100.0);
                     
