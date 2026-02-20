@@ -4,7 +4,7 @@ use std::time::Duration;
 use nokhwa::Camera;
 use nokhwa::utils::{CameraIndex, RequestedFormat, RequestedFormatType};
 use nokhwa::pixel_format::RgbFormat;
-use image::{ImageBuffer, Rgb};
+// use image::{ImageBuffer, Rgb};
 use rand::Rng;
 
 pub struct Eyes {
@@ -44,8 +44,8 @@ impl Eyes {
                     loop {
                         match camera.frame() {
                             Ok(frame_buffer) => {
-                                let width = frame_buffer.width();
-                                let height = frame_buffer.height();
+                                let width = frame_buffer.resolution().width();
+                                let height = frame_buffer.resolution().height();
                                 let raw_data = frame_buffer.buffer(); // RGB data
                                 
                                 // 1. Convert to Grayscale (Luminance)
