@@ -42,6 +42,7 @@ impl Eyes {
                     let mut last_frame_gray: Option<Vec<u8>> = None;
                     
                     loop {
+                        thread::sleep(Duration::from_millis(200)); // 5Hz Capture Rate
                         match camera.frame() {
                             Ok(frame_buffer) => {
                                 let width = frame_buffer.resolution().width();

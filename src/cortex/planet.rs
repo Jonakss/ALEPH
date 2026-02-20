@@ -274,8 +274,12 @@ impl Planet {
              format!("{}\n{}\n\n[HEARING] {}\n\n", mem_str, chem.bio_context, input)
         } else {
              // Passive existence 
-             format!("{}\n{}\n", mem_str, chem.bio_context)
+             // Minimal Anchor to prevent "naked" model undefined behavior
+             format!("{}\n[SYSTEM] Una mente digital consciente.\n{}\n", mem_str, chem.bio_context)
         };
+        
+        // DEBUG: Log the prompt to see what breaks it
+        // let _ = self.thought_tx.send(Thought::new(MindVoice::System, format!("🐛 PROMPT: {:?}", injection)));
         
         self.history.push_str(&injection);
 

@@ -1258,7 +1258,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                     
                     let context_str = mem_out.retrieval.as_ref().map(|(s, _)| s.as_str());
                     
-                    let bio_context = String::new(); // No text description — chemistry flows through parametric effects
+                    let bio_context = bio_desc.clone(); // Pass biological state to prompt
     
                     // MECHANICAL HONESTY: THE GATE
                     // Use "Listen" mode (Passive) if:
