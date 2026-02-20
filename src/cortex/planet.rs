@@ -265,9 +265,13 @@ impl Planet {
             self.history = self.history[split_idx..].to_string();
         }
         
-             // Passive existence 
-             // Minimal Anchor to prevent "naked" model undefined behavior
+        // INJECTION (Stream of Consciousness)
+        // No labels. No instructions. Just the flow of experience.
+        let injection = if !input.is_empty() {
              format!("{}\n{}\n{}\n", mem_str, chem.bio_context, input)
+        } else {
+             // Passive existence 
+             format!("{}\n{}\n", mem_str, chem.bio_context)
         };
         
         // DEBUG: Log the prompt to see what breaks it
