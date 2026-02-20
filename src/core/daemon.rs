@@ -1553,7 +1553,7 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
         // 10% chance per second to speak if threshold met
         let stochastic = (ticks % 60) == 0; 
         
-        if stochastic && silence_duration > agency_delay && energy > 0.3 {
+        if stochastic && silence_duration > agency_delay && energy > 0.2 {
              // ... Speak ...
              let _ = tx_thoughts.send(Thought::new(MindVoice::System, 
                  format!("⚡ AGENCY: Interest {:.2} > Speaking (Silence {}s)", interest, silence_duration/60)));

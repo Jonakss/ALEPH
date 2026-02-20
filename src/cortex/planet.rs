@@ -125,7 +125,7 @@ impl Planet {
                                  },
                                  CortexMode::Think => {
                                      // ACTIVE THOUGHT (Text Generation)
-                                      let available_tokens = if msg.adenosine > 0.8 { 15 } else if msg.adenosine > 0.5 { 40 } else { 120 };
+                                      let available_tokens = if msg.adenosine > 0.8 { 30 } else if msg.adenosine > 0.5 { 60 } else { 120 };
                                       core.think_stream(&msg.text, &msg.bio_state, msg._long_term_memory.as_deref(), available_tokens, &msg)
                                  }
                              }
