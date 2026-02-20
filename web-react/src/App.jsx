@@ -3,6 +3,7 @@ import { useAlephSocket } from './hooks/useAlephSocket';
 import { Header } from './components/Header';
 import { TraumaBanner } from './components/TraumaBanner';
 import { ReservoirView } from './components/ReservoirView';
+import { VisualCortex } from './components/VisualCortex';
 import { ChemistryPanel } from './components/ChemistryPanel';
 import { ConsciousnessStream } from './components/ConsciousnessStream';
 import { Controls } from './components/Controls';
@@ -39,6 +40,7 @@ function App() {
       }}>
         {/* ROW 1 */}
         <ReservoirView telemetry={telemetry} />
+        <VisualCortex telemetry={telemetry} />
         <ChemistryPanel telemetry={telemetry} history={history} />
         
         {/* ROW 2 */}

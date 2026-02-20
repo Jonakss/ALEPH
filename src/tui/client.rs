@@ -78,7 +78,9 @@ pub fn run() -> Result<()> {
         cpu_usage: 0.0,
         activations: Vec::new(),
         region_map: Vec::new(),
-        reservoir_size: 500,
+        visual_cortex: Vec::new(),
+        
+        // Spatial Topology (Real backend positions)
         neuron_positions: Vec::new(),
     };
     
@@ -129,13 +131,14 @@ pub fn run() -> Result<()> {
                                             lucidity: *lucidity,
                                             reservoir_activity: reservoir_activity.clone(),
                                             short_term_memory: short_term_memory.clone(),
-                                            current_state: format!("JSON ERR: {}", e),
+                                            current_state: "Decoding Error".to_string(),
                                             entropy: 0.0, // Placeholder
-                                            loop_frequency: 60.0,
-                                            cpu_usage: 0.0,
+                                            loop_frequency: *loop_frequency,
+                                            cpu_usage: *cpu_usage,
                                             activations: Vec::new(),
                                             region_map: Vec::new(),
-                                            reservoir_size: 500,
+                                            reservoir_size: *reservoir_size,
+                                            visual_cortex: Vec::new(),
                                             neuron_positions: Vec::new(),
                                         };
                                     }

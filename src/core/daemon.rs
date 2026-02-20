@@ -58,6 +58,9 @@ struct WebTelemetry {
     
     // Genome Traits
     curiosity: f32,
+    
+    // New Senses
+    visual_cortex: Vec<f32>, // 64x64 Grid
     stress_tolerance: f32,
     generation: u32,
 }
@@ -701,8 +704,29 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                 }
 
                 // 2. VISUAL SENSATION (Phase 7 - Occipital Lobe)
-                if let Ok(visual_vec) = rx_vision.try_recv() {
-                     ego.inject_embedding(&visual_vec, crate::core::reservoir::NeuronRegion::Visual);
+                // Now receiving 64x64 Grid (4096 floats)
+                if let Ok(visual_grid) = rx_vision.try_recv() {
+                     // 1. Update Web State for Visualization
+                     if ticks % 4 == 0 { // ~15Hz update for UI
+                        if let Ok(mut state) = web_state.lock() {
+                            state.visual_cortex = visual_grid.clone();
+                        }
+                     }
+
+                     // 2. Downsample for Reservoir Embedding (4096 -> 64)
+                     // Simple strided sampling: take every 64th value
+                     // Better: Average pooling? Let's do strided for speed first.
+                     let mut embedding = Vec::with_capacity(64);
+                     let stride = visual_grid.len() / 64;
+                     for i in 0..64 {
+                         if let Some(val) = visual_grid.get(i * stride) {
+                             embedding.push(*val);
+                         } else {
+                             embedding.push(0.0);
+                         }
+                     }
+                     
+                     ego.inject_embedding(&embedding, crate::core::reservoir::NeuronRegion::Visual);
                 }
 
                 // STARTLE REFLEX (Cortisol)
@@ -1441,6 +1465,10 @@ pub fn run(listen_path: Option<String>, headless: bool) -> Result<()> {
                  activations: {
                      let state = web_state.lock().unwrap();
                      state.activations.clone()
+                 },
+                 visual_cortex: {
+                     let state = web_state.lock().unwrap();
+                     state.visual_cortex.clone()
                  },
                  region_map: ego.get_region_map(),
                  reservoir_size: ego.current_size(),
